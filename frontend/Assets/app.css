@@ -11,6 +11,11 @@ header {
     margin-bottom: 0 !important;
 }
 
+.app-body {
+    flex: 1 !important;
+    min-height: 0 !important;
+}
+
 main {
     display: flex;
     flex-direction: column;
