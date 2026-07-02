@@ -28,14 +28,22 @@ tower-http = { version = "0.6", features = ["fs", "trace"] }
 dotenvy = "0.15"
 cookie = "0.18"
 axum-extra = { version = "0.12", features = ["cookie"] }
-futures-util = "0.3"
-notify = "6.1"
 regex = "1.10"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 percent-encoding = "2.3"
 sha2 = "0.11"
+# OS RNG for session-id generation. We rely on `OsRng` exclusively (never
+# `thread_rng`'s user-space generator) so an attacker cannot predict session
+# tokens even if they observe the process memory.
+rand = "0.8"
+# Derive macro for the crate-wide `AppError` enum and its `IntoResponse`
+# mapping; avoids hand-rolling a Display + Error impl.
+thiserror = "2"
 # Direct dependency on `constant_time_eq` for PIN comparison. The same crate
 # is pulled in transitively by `shared-backend`, but declaring it here means a
 # future refactor of shared-backend won't silently break our use of it.
 constant_time_eq = "0.3"
+
+[dev-dependencies]
+tempfile = "3"

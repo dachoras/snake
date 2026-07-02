@@ -1,59 +1,13 @@
+//! Portuguese translation table for the Snake UI.
+//!
+//! Mirror of [`crate::i18n::en::translate`]. Missing keys fall through to
+//! the English table at lookup time so a partial translation still
+//! renders something useful. Add new entries here when a new key is
+//! added to the English table.
+
+/// Portuguese counterpart of [`crate::i18n::en::translate`].
 pub fn translate(key: &str) -> Option<&'static str> {
     match key {
-        "search_btn" => Some("Buscar (Ctrl+K)"),
-        "new_pad" => Some("Novo Bloco"),
-        "rename" => Some("Renomear"),
-        "delete" => Some("Excluir"),
-        "shortcuts" => Some("Atalhos (?)"),
-        "settings" => Some("Configurações"),
-        "logout" => Some("Sair"),
-        "online" => Some("online"),
-        "saving" => Some("Salvando..."),
-        "saved" => Some("Salvo"),
-        "copied" => Some("Copiado!"),
-        "copy" => Some("Copiar"),
-        "export" => Some("Exportar"),
-        "unsaved_changes" => Some("Alterações não salvas"),
-        "offline" => Some("Offline"),
-        "placeholder" => Some("Comece a digitar aqui..."),
-        "settings_title" => Some("Configurações"),
-        "settings_preview" => Some("Modo de Visualização Padrão:"),
-        "settings_save_interval" => Some("Tempo de Exibição da Mensagem (ms):"),
-        "settings_disable_print" => Some("Desativar auto-expansão na impressão:"),
-        "settings_lang" => Some("Idioma do aplicativo:"),
-        "settings_save" => Some("Salvar Configurações"),
-        "search_title" => Some("Fuzzy Busca em Blocos de Notas"),
-        "search_placeholder" => Some("Digite o título ou conteúdo para buscar..."),
-        "search_no_results" => Some("No matching notepads found."),
-        "login_title" => Some("Pad"),
-        "login_locked" => Some("Bloqueado. Tente novamente em 15 minutos."),
-        "login_prompt" => Some("Digite o PIN de autenticação para acessar"),
-        "login_btn" => Some("Unlock"),
-        "rename_title" => Some("Renomear Bloco de Notas"),
-        "rename_confirm" => Some("Renomear"),
-        "cancel" => Some("Cancelar"),
-        "reset" => Some("Redefinir"),
-        "delete_title" => Some("Excluir Bloco de Notas"),
-        "delete_msg" => Some(
-            "Tem certeza de que deseja excluir este bloco de notas? Esta ação não pode ser desfeita.",
-        ),
-        "delete_confirm" => Some("Excluir"),
-        "shortcuts_title" => Some("Atalhos de Teclado"),
-        "sc_search" => Some("Buscar Blocos de Notas"),
-        "sc_save" => Some("Salvar Manualmente"),
-        "sc_preview" => Some("Alternar Modo de Visualização"),
-        "sc_new" => Some("Novo Bloco de Notas"),
-        "sc_help" => Some("Ajuda de Atalhos"),
-        "close" => Some("Fechar"),
-        "prev_editor" => Some("Editor"),
-        "prev_split" => Some("Dividido"),
-        "prev_preview" => Some("Visualização"),
-        "tb_bold" => Some("Negrito"),
-        "tb_italic" => Some("Itálico"),
-        "tb_heading" => Some("Título"),
-        "tb_link" => Some("Link"),
-        "tb_code" => Some("Bloco de Código"),
-        "tb_list" => Some("Lista"),
         "score" => Some("PONTUAÇÃO"),
         "high_score" => Some("RECORD"),
         "press_start" => Some("APERTE START"),
@@ -67,6 +21,8 @@ pub fn translate(key: &str) -> Option<&'static str> {
         "resume" => Some("RETOMAR"),
         "leaderboard" => Some("CLASSIFICAÇÃO"),
         "no_scores" => Some("Nenhuma pontuação ainda."),
+        "login_locked" => Some("Bloqueado. Tente novamente em 15 minutos."),
+        "login_prompt" => Some("Digite o PIN de autenticação para acessar"),
         _ => None,
     }
 }

@@ -1,5 +1,7 @@
 # Snake - Traditional Arcade Game
 
+[![CI](https://github.com/UberMetroid/snake/actions/workflows/ci.yml/badge.svg)](https://github.com/UberMetroid/snake/actions/workflows/ci.yml)
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/UberMetroid/snake/main/assets/logo.png?v=1.0.26" alt="Snake Logo" width="128" height="128">
 </p>
@@ -108,7 +110,7 @@ Configure these settings inside your Docker Compose environment or container env
 | `SITE_TITLE` | Custom website title rendered in navigation headers, browser tabs, and PWA manifest. | `Snake` |
 | `BASE_URL` | Application base URL. | `http://localhost:4501` |
 | `ALLOWED_ORIGINS` | Comma-separated list of allowed HTTP request origins (CORS filter). Use `*` to allow all origins. | `*` |
-| `SNAKE_PIN` | Optional 4–10 digit PIN (numerical only) to lock access to the interface. Leave empty for public mode. *(Supports fallback `PIN`)* | None |
+| `SNAKE_PIN` | Optional PIN to lock access to the interface. Frontend accepts 4–10 ASCII digits; backend accepts 4-64 characters of any kind. Leave empty for public mode. *(Supports fallback `PIN`)* | None |
 | `TZ` | Timezone for the container processes and logs. | `UTC` |
 | `ENABLE_TRANSLATION` | Enable the multi-language / translation selector in the navigation header (true/false). | `false` |
 | `ENABLE_THEMES` | Enable the Super Metroid theme selector in the navigation header (true/false). | `true` |

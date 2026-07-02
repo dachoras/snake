@@ -1,11 +1,25 @@
+//! View layer for the root [`App`] component.
+//!
+//! Composes the [`Header`], body content (either [`Login`] or
+//! [`SnakeGame`]), and [`Footer`] inside a [`LocaleContext`] provider so
+//! every descendant can call `ctx.t(...)` for translations.
+
 use crate::app::{App, Msg};
-use crate::components::snake_game::SnakeGame;
+use crate::components::footer::Footer;
 use crate::components::header::Header;
 use crate::components::pin::Login;
+use crate::components::snake_game::SnakeGame;
 use shared_core::i18n::Language;
 use yew::prelude::*;
 
 impl App {
+    /// Renders the full application shell.
+    ///
+    /// When the user is not authenticated we mount [`Login`]; once they
+    /// pass the PIN gate the body becomes [`SnakeGame`]. The
+    /// `?redirect=...` query parameter is honoured after a successful
+    /// login by rewriting `history.replace_state` so the browser URL
+    /// matches the target.
     pub fn view_app(&self, ctx: &Context<Self>) -> Html {
         let locale_on_change = {
             let link = ctx.link().clone();
@@ -19,10 +33,7 @@ impl App {
         };
 
         let toggle_theme = ctx.link().callback(|_| Msg::ToggleTheme);
-
         let on_logout = ctx.link().callback(|_| Msg::Logout);
-
-
 
         let content_class = if self.authenticated {
             "app-body"
@@ -55,47 +66,39 @@ impl App {
                 />
                 <div class={content_class}>
                     {if !self.authenticated {
-                        html! { <Login on_login_success={
-                            let link = ctx.link().clone();
-                            Callback::from(move |_| {
-                                link.send_message(Msg::SetAuthenticated(true));
-                                if let Some(win) = web_sys::window() {
-                                    let loc = win.location();
-                                    let search = loc.search().unwrap_or_default();
-                                    let mut redirect_url = "/".to_string();
-                                    if let Ok(params) = web_sys::UrlSearchParams::new_with_str(&search)
-                                        && let Some(r) = params.get("redirect")
-                                            && !r.is_empty() && r.starts_with('/') && !r.starts_with("//") {
-                                                redirect_url = r;
-                                            }
-                                    if let Ok(history) = win.history() {
-                                        let _ = history.replace_state_with_url(
-                                            &wasm_bindgen::JsValue::NULL,
-                                            "",
-                                            Some(&redirect_url),
-                                        );
-                                    }
+                        html! {
+                            <Login
+                                on_login_success={
+                                    let link = ctx.link().clone();
+                                    Callback::from(move |_| {
+                                        link.send_message(Msg::SetAuthenticated(true));
+                                        Self::apply_redirect_query();
+                                    })
                                 }
-                            })
+                                on_status_change={
+                                    let link = ctx.link().clone();
+                                    Callback::from(move |status| {
+                                        link.send_message(Msg::SetStatus(status))
+                                    })
+                                }
+                            />
                         }
-                        on_status_change={
-                            let link = ctx.link().clone();
-                            Callback::from(move |status| link.send_message(Msg::SetStatus(status)))
-                        } /> }
                     } else {
                         html! {
                             <main>
                                 <SnakeGame
                                     on_status={
                                         let link = ctx.link().clone();
-                                        Callback::from(move |status| link.send_message(Msg::SetStatus(status)))
+                                        Callback::from(move |status| {
+                                            link.send_message(Msg::SetStatus(status))
+                                        })
                                     }
                                 />
                             </main>
                         }
                     }}
                 </div>
-                <crate::components::footer::Footer version={self.app_version.clone()} show_github={self.show_github}>
+                <Footer version={self.app_version.clone()} show_github={self.show_github}>
                     {
                         if let Some((msg, cls)) = &self.active_notification {
                             html! { <div class={format!("footer-status-text {}", cls)}>{ msg }</div> }
@@ -103,8 +106,35 @@ impl App {
                             html! { <div class="footer-status-text success">{"Ready"}</div> }
                         }
                     }
-                </crate::components::footer::Footer>
+                </Footer>
             </ContextProvider<crate::i18n::LocaleContext>>
+        }
+    }
+
+    /// Reads the `redirect` query parameter from `window.location.search`
+    /// and rewrites the URL via `history.replace_state`. Only accepts
+    /// same-origin paths (`/foo`, not `//evil.com/foo`).
+    fn apply_redirect_query() {
+        let Some(win) = web_sys::window() else {
+            return;
+        };
+        let loc = win.location();
+        let search = loc.search().unwrap_or_default();
+        let mut redirect_url = "/".to_string();
+        if let Ok(params) = web_sys::UrlSearchParams::new_with_str(&search)
+            && let Some(r) = params.get("redirect")
+            && !r.is_empty()
+            && r.starts_with('/')
+            && !r.starts_with("//")
+        {
+            redirect_url = r;
+        }
+        if let Ok(history) = win.history() {
+            let _ = history.replace_state_with_url(
+                &wasm_bindgen::JsValue::NULL,
+                "",
+                Some(&redirect_url),
+            );
         }
     }
 }

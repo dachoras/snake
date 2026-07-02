@@ -1,22 +1,14 @@
 {
-  "background_color": "#ffffff",
-  "description": "A simple notepad application",
+  "background_color": "#000000",
+  "description": "A traditional arcade snake game",
   "display": "standalone",
   "icons": [
-    {
-      "sizes": "192x192",
-      "src": "log.png",
-      "type": "image/png"
-    },
-    {
-      "sizes": "512x512",
-      "src": "log.png",
-      "type": "image/png"
-    }
+    { "sizes": "192x192", "src": "favicon.png", "type": "image/png" },
+    { "sizes": "512x512", "src": "favicon.png", "type": "image/png" }
   ],
-  "name": "Log",
+  "name": "Snake",
   "orientation": "any",
-  "short_name": "Log",
+  "short_name": "Snake",
   "start_url": "/",
   "theme_color": "#000000"
 }

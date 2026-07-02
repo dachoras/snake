@@ -1,16 +1,38 @@
+//! Pure game-logic functions for the Snake game.
+//!
+//! Kept free of Yew hooks and DOM access so it can be exercised from a
+//! future WASM test harness and so the [`crate::components::snake::tick`]
+//! module stays focused on the timer loop.
+
 use yew::UseStateHandle;
 
+/// A single cell coordinate on the [`crate::components::snake_board`] grid.
+pub type Pos = (i32, i32);
+
+/// Advances the snake one step in `next_dir`.
+///
+/// Behaviour:
+/// - Moves the head by `next_dir`; updates `direction`.
+/// - Sets `game_over` if the head leaves the grid or collides with the
+///   body. The early-return form here avoids accidental fall-through into
+///   the score update below.
+/// - If the head lands on `food`, grows the snake by one, awards points
+///   (30 for gold, 10 otherwise), updates `high_score` (and persists it),
+///   rolls a new gold/normal food, and respawns the food at a free cell
+///   via `generate_food`.
+/// - Otherwise just slides the snake forward by dropping the tail cell.
+#[allow(clippy::too_many_arguments)]
 pub fn handle_tick(
-    snake: &UseStateHandle<Vec<(i32, i32)>>,
-    dir: &UseStateHandle<(i32, i32)>,
-    next_dir: &UseStateHandle<(i32, i32)>,
-    food: &UseStateHandle<(i32, i32)>,
+    snake: &UseStateHandle<Vec<Pos>>,
+    dir: &UseStateHandle<Pos>,
+    next_dir: &UseStateHandle<Pos>,
+    food: &UseStateHandle<Pos>,
     score: &UseStateHandle<u32>,
     high_score: &UseStateHandle<u32>,
     game_over: &UseStateHandle<bool>,
     is_gold: &UseStateHandle<bool>,
     grid_size: i32,
-    generate_food: &impl Fn() -> (i32, i32),
+    generate_food: &impl Fn() -> Pos,
 ) {
     let current_dir = **next_dir;
     dir.set(current_dir);

@@ -1,24 +1,39 @@
+//! PIN-gate login component.
+//!
+//! Renders a single numeric input that auto-submits once it reaches the
+//! expected length, or that the user can submit explicitly via Enter.
+//! Communicates with the backend through [`ApiService::check_pin_required`]
+//! and [`ApiService::verify_pin`]. On success it invokes the parent's
+//! `on_login_success` callback; on failure it pushes a localised error
+//! message into `on_status_change`.
+
 use crate::api::ApiService;
+use shared_frontend::i18n::Language;
+use shared_frontend::i18n::strings::{StringKey, lookup};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
-use shared_frontend::i18n::strings::{lookup, StringKey};
-use shared_frontend::i18n::Language;
 
+/// Props consumed by [`Login`].
 #[derive(Properties, PartialEq)]
 pub struct LoginProps {
+    /// Fires once the backend accepts the entered PIN.
     pub on_login_success: Callback<()>,
+    /// Optional sink for transient status banners; defaults to a no-op
+    /// callback so unconfigured parents don't have to pass anything.
     #[prop_or_default]
     pub on_status_change: Callback<Option<(String, String)>>,
 }
 
+/// Numeric-PIN login form. Mounted by [`crate::app::view`] until the user
+/// passes the gate configured by the backend.
 #[function_component(Login)]
 pub fn login(props: &LoginProps) -> Html {
-    let pin_input = use_state(|| "".to_string());
-    let error_msg = use_state(|| "".to_string());
+    let pin_input = use_state(|| String::new());
+    let error_msg = use_state(|| String::new());
     let is_locked = use_state(|| false);
     let pin_length = use_state(|| 4);
     let input_ref = use_node_ref();
-    let locale = use_context::<crate::i18n::LocaleContext>().unwrap();
+    let locale = use_context::<crate::i18n::LocaleContext>().expect("LocaleContext provided");
 
     {
         let input_ref = input_ref.clone();
@@ -66,7 +81,7 @@ pub fn login(props: &LoginProps) -> Html {
 
             if filtered.len() <= pin_len {
                 pin_input.set(filtered.clone());
-                error_msg.set("".to_string());
+                error_msg.set(String::new());
 
                 if filtered.len() == pin_len {
                     let on_success = on_success.clone();
@@ -80,12 +95,17 @@ pub fn login(props: &LoginProps) -> Html {
                             if res.success {
                                 on_success.emit(());
                             } else {
-                                let status_msg = lookup(StringKey::StatusPinFailure, Language::from_code(&loc_code)).to_string();
+                                let status_msg = lookup(
+                                    StringKey::StatusPinFailure,
+                                    Language::from_code(&loc_code),
+                                )
+                                .to_string();
                                 on_status.emit(Some((status_msg, "error".to_string())));
                                 let on_status_clear = on_status.clone();
                                 gloo_timers::callback::Timeout::new(3000, move || {
                                     on_status_clear.emit(None);
-                                }).forget();
+                                })
+                                .forget();
 
                                 if let Some(err) = res.error {
                                     if err.contains("Too many attempts") {
@@ -126,12 +146,15 @@ pub fn login(props: &LoginProps) -> Html {
                         if res.success {
                             on_success.emit(());
                         } else {
-                            let status_msg = lookup(StringKey::StatusPinFailure, Language::from_code(&loc_code)).to_string();
+                            let status_msg =
+                                lookup(StringKey::StatusPinFailure, Language::from_code(&loc_code))
+                                    .to_string();
                             on_status.emit(Some((status_msg, "error".to_string())));
                             let on_status_clear = on_status.clone();
                             gloo_timers::callback::Timeout::new(3000, move || {
                                 on_status_clear.emit(None);
-                            }).forget();
+                            })
+                            .forget();
 
                             if let Some(err) = res.error {
                                 if err.contains("Too many attempts") {

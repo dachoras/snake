@@ -1,14 +1,29 @@
-#![allow(dead_code)]
-use crate::types::{Notepad, SearchItem, Settings};
+//! HTTP API client for the Snake frontend.
+//!
+//! Wraps [`gloo_net::http::Request`] calls to the backend endpoints actually
+//! exercised by the game UI: PIN-gated auth, configuration loading, and the
+//! global leaderboard. Theme persistence lives on [`StorageService`] which
+//! delegates to [`crate::storage`].
+
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
 
 use crate::storage::StorageService as GenericStorage;
 use shared_frontend::theme::{Theme, mapping::Scheme};
 
+/// Theme persistence facade used by [`crate::app::App`].
+///
+/// Reads and writes the active theme to local storage (with cookie mirroring
+/// handled inside [`crate::storage::StorageService`]). Unknown stored values
+/// are normalised against the [`Scheme`] / [`Theme`] registry.
 pub struct StorageService;
 
 impl StorageService {
+    /// Returns the canonical name of the user's saved theme.
+    ///
+    /// Accepts either a raw theme id (`"brinstar"`, `"tourian"`, ...) or the
+    /// legacy scheme id stored by older clients; unknown values fall back to
+    /// [`Theme::default`].
     pub fn get_theme() -> String {
         let raw = GenericStorage::get_item("theme", Theme::default().name());
         let theme = if let Some(scheme) = Scheme::from_id(&raw) {
@@ -25,102 +40,86 @@ impl StorageService {
         theme
     }
 
+    /// Persists the active theme name to local storage and the matching cookie.
     pub fn set_theme(theme: &str) {
         GenericStorage::set_item("theme", theme);
     }
-
-    pub fn get_settings() -> Settings {
-        let val = GenericStorage::get_item("log_settings", "");
-        if !val.is_empty() {
-            serde_json::from_str(&val).unwrap_or_default()
-        } else {
-            Settings::default()
-        }
-    }
-
-    pub fn set_settings(settings: &Settings) {
-        if let Ok(serialized) = serde_json::to_string(settings) {
-            GenericStorage::set_item("log_settings", &serialized);
-        }
-    }
 }
 
+/// REST endpoints exposed by the Snake backend.
 pub struct ApiService;
 
+/// One row of the global high-score table.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct LeaderboardEntry {
+    /// Player-chosen display name.
     pub name: String,
+    /// Final score when the row was submitted.
     pub score: u32,
+    /// ISO-8601 submission date set by the server; empty for outbound payloads.
     pub date: String,
 }
 
-#[derive(Deserialize)]
-pub struct NotepadsResponse {
-    pub notepads_list: Vec<Notepad>,
-    pub note_history: String,
-}
-
-#[derive(Deserialize)]
-pub struct NotesResponse {
-    pub content: String,
-}
-
-#[derive(Serialize)]
-pub struct SaveNotesPayload {
-    pub content: String,
-}
-
-#[derive(Serialize)]
-pub struct RenameNotepadPayload {
-    pub name: String,
-}
-
+/// Response payload of [`ApiService::check_pin_required`].
 #[derive(Deserialize)]
 pub struct PinRequiredResponse {
+    /// `true` if the app is configured to require a PIN at startup.
     pub required: bool,
+    /// Expected PIN length (in digits).
     pub length: usize,
+    /// `true` if the IP is currently rate-limited and must wait.
     pub locked: bool,
 }
 
+/// Outbound payload of [`ApiService::verify_pin`].
 #[derive(Serialize)]
 pub struct VerifyPinPayload {
+    /// PIN entered by the user; digits only.
     pub pin: String,
 }
 
+/// Response payload of [`ApiService::verify_pin`].
 #[derive(Deserialize)]
 pub struct VerifyPinResponse {
+    /// `true` if the PIN was accepted.
     pub success: bool,
+    /// Human-readable error message, surfaced to the login UI on failure.
     pub error: Option<String>,
 }
 
+/// Helper used by [`ConfigResponse`] so missing JSON fields default to `true`
+/// (the production behaviour the backend ships with).
 fn default_true() -> bool {
     true
 }
 
+/// Application-wide configuration fetched once at startup.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigResponse {
+    /// Deployed backend version, surfaced in the header.
     pub version: String,
+    /// Site title rendered in the header link.
     pub site_title: String,
+    /// Whether the language picker is shown.
     #[serde(default)]
     pub enable_translation: bool,
+    /// Whether the theme toggle is shown.
     #[serde(default = "default_true")]
     pub enable_themes: bool,
+    /// Whether the print button is shown.
     #[serde(default = "default_true")]
     pub enable_print: bool,
+    /// Whether the version badge is rendered in the header.
     #[serde(default = "default_true")]
     pub show_version: bool,
+    /// Whether the GitHub footer link is rendered.
     #[serde(default = "default_true")]
     pub show_github: bool,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchResponse {
-    pub results: Vec<SearchItem>,
-}
-
 impl ApiService {
+    /// Asks the backend whether a PIN gate is required to access the game.
     pub async fn check_pin_required() -> Result<PinRequiredResponse, gloo_net::Error> {
         Request::get("/api/pin-required")
             .send()
@@ -129,6 +128,9 @@ impl ApiService {
             .await
     }
 
+    /// Submits the user's PIN. Translates HTTP 400/401/429 bodies with a
+    /// `{"error": "..."}` shape into [`VerifyPinResponse`] with the error
+    /// string preserved so the UI can render lockout hints.
     pub async fn verify_pin(pin: &str) -> Result<VerifyPinResponse, gloo_net::Error> {
         let payload = VerifyPinPayload {
             pin: pin.to_string(),
@@ -149,11 +151,15 @@ impl ApiService {
         response.json::<VerifyPinResponse>().await
     }
 
+    /// Invalidates the server-side session cookie. Best-effort: any error is
+    /// ignored because the client will optimistically transition to the
+    /// logged-out state regardless.
     pub async fn logout() -> Result<(), gloo_net::Error> {
         Request::post("/api/logout").send().await?;
         Ok(())
     }
 
+    /// Fetches the runtime configuration consumed by [`crate::app::App`].
     pub async fn get_config() -> Result<ConfigResponse, gloo_net::Error> {
         Request::get("/api/config")
             .send()
@@ -162,70 +168,7 @@ impl ApiService {
             .await
     }
 
-    pub async fn get_notepads() -> Result<NotepadsResponse, gloo_net::Error> {
-        Request::get("/api/notepads")
-            .send()
-            .await?
-            .json::<NotepadsResponse>()
-            .await
-    }
-
-    pub async fn get_notes(id: &str) -> Result<NotesResponse, gloo_net::Error> {
-        Request::get(&format!("/api/notes/{}", id))
-            .send()
-            .await?
-            .json::<NotesResponse>()
-            .await
-    }
-
-    pub async fn save_notes(id: &str, content: &str) -> Result<(), gloo_net::Error> {
-        let payload = SaveNotesPayload {
-            content: content.to_string(),
-        };
-        Request::post(&format!("/api/notes/{}", id))
-            .json(&payload)?
-            .send()
-            .await?;
-        Ok(())
-    }
-
-    pub async fn create_notepad() -> Result<Notepad, gloo_net::Error> {
-        Request::post("/api/notepads")
-            .send()
-            .await?
-            .json::<Notepad>()
-            .await
-    }
-
-    pub async fn rename_notepad(id: &str, name: &str) -> Result<(), gloo_net::Error> {
-        let payload = RenameNotepadPayload {
-            name: name.to_string(),
-        };
-        Request::put(&format!("/api/notepads/{}", id))
-            .json(&payload)?
-            .send()
-            .await?;
-        Ok(())
-    }
-
-    pub async fn delete_notepad(id: &str) -> Result<(), gloo_net::Error> {
-        Request::delete(&format!("/api/notepads/{}", id))
-            .send()
-            .await?;
-        Ok(())
-    }
-
-    pub async fn search(query: &str) -> Result<SearchResponse, gloo_net::Error> {
-        let encoded =
-            percent_encoding::utf8_percent_encode(query, percent_encoding::NON_ALPHANUMERIC)
-                .to_string();
-        Request::get(&format!("/api/search?query={}", encoded))
-            .send()
-            .await?
-            .json::<SearchResponse>()
-            .await
-    }
-
+    /// Fetches the global leaderboard, sorted server-side.
     pub async fn get_leaderboard() -> Result<Vec<LeaderboardEntry>, gloo_net::Error> {
         Request::get("/api/leaderboard")
             .send()
@@ -234,11 +177,13 @@ impl ApiService {
             .await
     }
 
+    /// Posts the player's final score and name. The server fills in the
+    /// `date` field, so the outbound payload leaves it empty.
     pub async fn submit_score(name: &str, score: u32) -> Result<(), gloo_net::Error> {
         let payload = LeaderboardEntry {
             name: name.to_string(),
             score,
-            date: "".to_string(),
+            date: String::new(),
         };
         Request::post("/api/leaderboard")
             .json(&payload)?

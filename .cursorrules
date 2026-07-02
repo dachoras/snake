@@ -14,17 +14,43 @@
 
 # Project Principles
 
-- **Frontend Rust File Size Limit**: All Rust source files in the `frontend/src` directory must be strictly between 25 and 250 lines of code (inclusive). This ensures modularity, compile speed, and readability.
-- **Code Modularity**: Extract string parsing, Operational Transformation helpers, and utility structures into dedicated modules (e.g. `collab_utils.rs`) rather than making core components too large.
-- **Vanilla Styling**: All styling uses vanilla CSS variables inside `frontend/Assets/styles.css`. Avoid adding third-party styling frameworks.
+- **Frontend Rust File Size Limit**: All Rust source files in the `frontend/src` directory must be strictly between 25 and 250 lines of code (inclusive). This keeps modules small enough for fast incremental compilation.
+- **Vanilla Styling**: All styling lives in `frontend/Assets/app.css` plus shared CSS imported from `shared-frontend` (vendored into `frontend/Assets/shared-assets/styles/` at build time). No CSS-in-Rust, no Tailwind, no UI framework.
 
 # Project Structure
 
-- **Backend (`src/`)**: Axum-based HTTP/WebSocket server. Manages collaborative note syncing, note persistence, and security settings.
-- **Frontend (`frontend/`)**: Yew-based WebAssembly application compiled via Trunk.
-  - `frontend/src/main.rs`: Application shell and route controller.
-  - `frontend/src/collab.rs` & `frontend/src/collab_utils.rs`: Real-time operational transformation and cursor synchronizations.
-  - `frontend/src/editor.rs` & `frontend/src/toolbar.rs`: Markdown editor layout, keybind shortcuts, and format toolbar.
-  - `frontend/src/header.rs`: App header with notepad selector and multi-theme switcher.
-  - `frontend/src/search.rs`: Fuzzy search query and preview snippet list.
-  - `frontend/src/login.rs`: PIN security login view.
+## Frontend (`frontend/`) — Yew + Trunk
+
+- `frontend/src/main.rs`: Crate root. Declares submodules and mounts `App`.
+- `frontend/src/app.rs` + `frontend/src/app/{update,view}.rs`: Root `App` component (msg enum, state, and view split).
+- `frontend/src/api.rs`, `storage.rs`, `types.rs`: HTTP helpers, local-storage adapters, shared DTOs.
+- `frontend/src/i18n.rs` + `frontend/src/i18n/{en,de,es,fr,ja,pt,ru,zh}.rs`: Locale strings.
+- `frontend/src/components/`:
+  - `header.rs`, `footer.rs` — thin re-exports of `shared_frontend::Header` / `Footer`.
+  - `pin.rs` — PIN login view.
+  - `event_listener.rs` — global keyboard / focus / online-status wiring.
+  - `snake_state.rs` — reducer / hooks for snake state (direction, segments, score, food, gold timer).
+  - `snake_logic.rs` — pure tick + collision helpers (used by `snake_game`).
+  - `snake_board.rs` — grid renderer.
+  - `snake_game.rs` — top-level game component composing board + overlay + dpad + leaderboard.
+  - `snake_overlay.rs` — gold-food countdown + game-over overlays.
+  - `snake_dpad.rs` — touch / on-screen D-Pad.
+  - `snake_leaderboard.rs` — fetches + renders Top 10.
+
+## Backend (`backend/`) — Axum + Tokio
+
+- `backend/src/main.rs`: Wires logging, env, `AppState`, router; binds TCP.
+- `backend/src/config.rs`: `AppConfig` wrapping `shared_backend::server::ServerConfig` with Snake-specific extras.
+- `backend/src/state.rs`: `AppState` / `AppStateInner` (config, data dir, leaderboard path, active sessions, per-IP rate limiter).
+- `backend/src/routes/mod.rs`: Re-exports + shared handlers (`serve_service_worker`, `health_check`, `serve_asset_manifest`, `serve_manifest`).
+- `backend/src/routes/pages.rs`: `serve_root` + `serve_login` + redirect validator.
+- `backend/src/routes/leaderboard.rs`: `get_leaderboard` + `submit_score` (file-backed JSON).
+- `backend/src/routes/auth/mod.rs`: `is_authenticated`, `require_pin`, `rate_limit_middleware`, cookie name.
+- `backend/src/routes/auth/verify_pin.rs`: PIN verification, session ID issuance, cookie write.
+- `backend/src/routes/auth/pin_required.rs`: Public `/config` + `/pin-required` endpoints.
+- `backend/src/routes/auth/logout.rs`: Session invalidation + cookie clear.
+
+## Build / Runtime
+
+- Trunk builds the WASM frontend from `frontend/index.html` and copies `frontend/Assets/` (including the vendored `shared-assets/styles/`) into `frontend/dist/`.
+- The backend serves `frontend/dist/` as static fallback and regenerates `asset-manifest.json` and `Assets/manifest.json` at runtime — do not check in either.

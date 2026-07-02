@@ -1,184 +1,48 @@
-use axum::{
-    Router, middleware,
-    routing::{get, post},
-};
-use shared_backend::middleware::{HstsState, cors_layer, hsts_layer, security_headers_layer};
-use std::collections::HashMap;
+//! Process entrypoint.
+//!
+//! Delegates the entire startup sequence to [`bootstrap::build_runtime`]
+//! and the URL assembly to [`router::build_router`]. Anything substantive
+//! lives in those modules; this file should stay under ~30 lines.
+
 use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::RwLock;
-use tower_http::services::ServeDir;
-use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
-mod config;
-mod routes;
-
-mod state;
-#[cfg(test)]
-mod tests;
-pub use config::AppConfig;
-use routes::*;
-use state::{AppState, AppStateInner};
+use backend::bootstrap;
+use backend::router::build_router;
 
 #[tokio::main]
 async fn main() {
-    // Initialize logging
-    let log_dir = std::env::var("LOG_DIR").ok().or_else(|| {
-        let data_dir = std::path::Path::new("/app/data");
-        if data_dir.is_dir() {
-            Some("/app/data/log".to_string())
-        } else {
-            Some("/app/log".to_string())
+    let runtime = match bootstrap::build_runtime().await {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("startup failed: {e}");
+            std::process::exit(1);
         }
-    });
-
-    let (file_layer_error, file_layer_app) = if let Some(ref dir) = log_dir {
-        if dir == "off" || dir == "none" || dir == "false" {
-            (None, None)
-        } else {
-            let _ = std::fs::create_dir_all(dir);
-            let error_file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(std::path::Path::new(dir).join("error.log"))
-                .ok();
-            let app_file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(std::path::Path::new(dir).join("app.log"))
-                .ok();
-
-            let error_layer = error_file.map(|file| {
-                tracing_subscriber::fmt::layer()
-                    .with_writer(std::sync::Mutex::new(file))
-                    .with_ansi(false)
-                    .with_filter(tracing_subscriber::filter::LevelFilter::WARN)
-            });
-
-            let app_layer = app_file.map(|file| {
-                tracing_subscriber::fmt::layer()
-                    .with_writer(std::sync::Mutex::new(file))
-                    .with_ansi(false)
-                    .with_filter(tracing_subscriber::filter::LevelFilter::INFO)
-            });
-
-            (error_layer, app_layer)
-        }
-    } else {
-        (None, None)
     };
 
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(file_layer_error)
-        .with(file_layer_app)
-        .init();
+    tracing::info!(
+        target: "main",
+        port = runtime.port,
+        version = %runtime.state.config.version,
+        environment = %runtime.state.config.node_env,
+        base_url = %runtime.state.config.server.base_url,
+        "snake backend ready"
+    );
 
-    dotenvy::from_path("/app/data/.env").ok();
-    dotenvy::dotenv().ok();
-
-    let port = std::env::var("PORT")
-        .ok()
-        .and_then(|s| s.parse::<u16>().ok())
-        .unwrap_or(4501);
-
-    let config = AppConfig::load_from_env(port);
-
-    let root_path = PathBuf::from(".");
-    let data_dir = root_path.join("data");
-    let leaderboard_file = data_dir.join("leaderboard.json");
-
-    // Initialize state. Note: `login_attempts` is intentionally absent — PIN
-    // brute-force lockouts are now global via `shared_backend::auth::attempts`
-    // and clean themselves up. We only manage the per-IP request budget here.
-    let state: AppState = Arc::new(AppStateInner {
-        config,
-        data_dir,
-        leaderboard_file,
-        active_sessions: RwLock::new(std::collections::HashSet::new()),
-        rate_limiter: RwLock::new(HashMap::new()),
-    });
-
-    // Run migrations and load list
-    if let Err(e) = state.ensure_data_dir().await {
-        eprintln!("Error initializing data directory: {}", e);
-        std::process::exit(1);
-    }
-
-    // Background cleanup for the per-IP request budget only. PIN-attempt
-    // lockouts now live in `shared_backend::auth::attempts` (process-global)
-    // and remove themselves when the lockout expires.
-    let state_clone2 = state.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-            state_clone2.clean_old_rate_limits().await;
+    let app = build_router(runtime.state, &runtime.web_root);
+    let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", runtime.port)).await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!(target: "main", error = %e, port = runtime.port, "bind failed");
+            std::process::exit(1);
         }
-    });
-
-    // CORS, security headers, and HSTS are all delegated to `shared-backend`,
-    // so the same production-tested configuration applies across every
-    // companion app. The `Arc<ServerConfig>` is shared between layers to keep
-    // the dependency tree small.
-    let server_config = Arc::new(state.config.server.clone());
-    let cors = cors_layer(&server_config);
-
-    // Setup routes
-    let api_routes = Router::new()
-        .route("/leaderboard", get(get_leaderboard).post(submit_score))
-        .layer(middleware::from_fn_with_state(state.clone(), require_pin));
-
-    let public_api_routes = Router::new()
-        .route("/verify-pin", post(verify_pin))
-        .route("/pin-required", get(pin_required))
-        .route("/config", get(get_config))
-        .route("/logout", post(logout));
-
-    let merged_api = api_routes
-        .merge(public_api_routes)
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            crate::routes::rate_limit_middleware,
-        ));
-
-    let app = Router::new()
-        .route("/", get(serve_root))
-        .route("/login", get(serve_login))
-        .route("/service-worker.js", get(serve_service_worker))
-        .route("/asset-manifest.json", get(serve_asset_manifest))
-        .route("/Assets/manifest.json", get(serve_manifest))
-        .nest("/api", merged_api)
-        .route("/health", get(health_check))
-        .fallback_service(
-            ServeDir::new("frontend/dist")
-                .precompressed_br()
-                .precompressed_gzip(),
-        )
-        .layer(middleware::from_fn_with_state(
-            HstsState(server_config.clone()),
-            hsts_layer,
-        ))
-        .layer(middleware::from_fn(security_headers_layer))
-        .layer(tower_http::trace::TraceLayer::new_for_http())
-        .layer(cors)
-        .with_state(state.clone());
-
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
-        .await
-        .unwrap();
-    println!("Server is running on port {}", port);
-    println!("Base URL: {}", state.config.server.base_url);
-    println!("Environment: {}", state.config.node_env);
-    println!("Version: {}", state.config.version);
-
-
-
-    axum::serve(
+    };
+    if let Err(e) = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await
-    .unwrap();
+    {
+        tracing::error!(target: "main", error = %e, "server stopped with error");
+        std::process::exit(1);
+    }
 }

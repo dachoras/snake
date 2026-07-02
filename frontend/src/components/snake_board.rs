@@ -1,13 +1,26 @@
+//! Renders the [`GRID_SIZE`] x [`GRID_SIZE`] playfield.
+//!
+//! Each cell is a `<div>` whose class is selected based on whether the
+//! cell holds the snake head, a body segment, the food (gold or regular),
+//! or is empty.
+
 use yew::prelude::*;
 
+/// Props consumed by [`SnakeBoard`].
 #[derive(Properties, PartialEq)]
 pub struct SnakeBoardProps {
+    /// Snake body cells, ordered head-first.
     pub snake: Vec<(i32, i32)>,
+    /// Current food position.
     pub food: (i32, i32),
+    /// Number of cells per side.
     pub grid_size: i32,
+    /// `true` when the food currently on the board is the gold variant.
     pub is_gold: bool,
 }
 
+/// Visual representation of the playfield. Pure: takes game state via
+/// props and renders a static grid.
 #[function_component(SnakeBoard)]
 pub fn snake_board(props: &SnakeBoardProps) -> Html {
     let grid_size = props.grid_size;

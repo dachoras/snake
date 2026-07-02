@@ -78,7 +78,7 @@
           nativeBuildInputs = [ pkgs.pkg-config ];
           buildInputs = [ pkgs.openssl ];
 
-          doCheck = false;
+          doCheck = true;
 
           buildPhase = ''
             mkdir -p frontend/Assets/shared-assets

@@ -1,14 +1,21 @@
+//! Top-3 leaderboard panel rendered next to the playfield.
+
 use crate::api::LeaderboardEntry;
 use yew::prelude::*;
 
+/// Props consumed by [`LeaderboardPanel`].
 #[derive(Properties, PartialEq)]
 pub struct LeaderboardPanelProps {
+    /// Full leaderboard as returned by the backend; only the top three
+    /// entries are actually rendered.
     pub leaderboard: Vec<LeaderboardEntry>,
 }
 
+/// Renders the leaderboard header and the top three rows, or an empty-
+/// state message when no scores exist yet.
 #[function_component(LeaderboardPanel)]
 pub fn leaderboard_panel(props: &LeaderboardPanelProps) -> Html {
-    let locale = use_context::<crate::i18n::LocaleContext>().unwrap();
+    let locale = use_context::<crate::i18n::LocaleContext>().expect("LocaleContext provided");
     html! {
         <div class="leaderboard-panel">
             <h3>{locale.t("leaderboard")}</h3>

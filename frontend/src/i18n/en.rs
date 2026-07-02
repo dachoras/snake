@@ -1,59 +1,15 @@
+//! English (default-fallback) translation table for the Snake UI.
+//!
+//! Only keys actually consumed by the UI live here; everything else was
+//! inherited from a sibling app and is intentionally omitted to keep the
+//! table small and to make missing translations obvious.
+
+/// Look up an English string by its [`key`].
+///
+/// Returns `None` so the dispatcher in [`crate::i18n::translate`] can fall
+/// back to the raw key when no locale matches.
 pub fn translate(key: &str) -> Option<&'static str> {
     match key {
-        "search_btn" => Some("Search (Ctrl+K)"),
-        "new_pad" => Some("New Pad"),
-        "rename" => Some("Rename"),
-        "delete" => Some("Delete"),
-        "shortcuts" => Some("Shortcuts (?)"),
-        "settings" => Some("Settings"),
-        "logout" => Some("Logout"),
-        "online" => Some("online"),
-        "saving" => Some("Saving..."),
-        "saved" => Some("Saved"),
-        "copied" => Some("Copied!"),
-        "copy" => Some("Copy"),
-        "export" => Some("Export"),
-        "unsaved_changes" => Some("Unsaved changes"),
-        "offline" => Some("Offline"),
-        "placeholder" => Some("Start typing here..."),
-        "settings_title" => Some("Settings"),
-        "settings_preview" => Some("Default Preview Mode:"),
-        "settings_save_interval" => Some("Status Message Keep Time (ms):"),
-        "settings_disable_print" => Some("Disable auto-expand in Print:"),
-        "settings_lang" => Some("App Language:"),
-        "settings_save" => Some("Save Settings"),
-        "search_title" => Some("Fuzzy Search Notepads"),
-        "search_placeholder" => Some("Type title or content to search..."),
-        "search_no_results" => Some("No matching notepads found."),
-        "login_title" => Some("Pad"),
-        "login_locked" => Some("Locked Out"),
-        "login_prompt" => Some("Enter PIN"),
-        "login_btn" => Some("Unlock"),
-        "rename_title" => Some("Rename Notepad"),
-        "rename_confirm" => Some("Rename"),
-        "cancel" => Some("Cancel"),
-        "reset" => Some("Reset"),
-        "delete_title" => Some("Delete Notepad"),
-        "delete_msg" => {
-            Some("Are you sure you want to delete this notepad? This action cannot be undone.")
-        }
-        "delete_confirm" => Some("Delete"),
-        "shortcuts_title" => Some("Keyboard Shortcuts"),
-        "sc_search" => Some("Search Notepads"),
-        "sc_save" => Some("Manual Save"),
-        "sc_preview" => Some("Toggle Preview Mode"),
-        "sc_new" => Some("New Notepad"),
-        "sc_help" => Some("Shortcuts Help"),
-        "close" => Some("Close"),
-        "prev_editor" => Some("Editor"),
-        "prev_split" => Some("Split"),
-        "prev_preview" => Some("Preview"),
-        "tb_bold" => Some("Bold"),
-        "tb_italic" => Some("Italic"),
-        "tb_heading" => Some("Heading"),
-        "tb_link" => Some("Link"),
-        "tb_code" => Some("Code Block"),
-        "tb_list" => Some("List"),
         "score" => Some("SCORE"),
         "high_score" => Some("HIGH"),
         "press_start" => Some("PRESS START"),
@@ -67,6 +23,8 @@ pub fn translate(key: &str) -> Option<&'static str> {
         "resume" => Some("RESUME"),
         "leaderboard" => Some("LEADERBOARD"),
         "no_scores" => Some("No high scores yet."),
+        "login_locked" => Some("Locked Out"),
+        "login_prompt" => Some("Enter PIN"),
         _ => None,
     }
 }

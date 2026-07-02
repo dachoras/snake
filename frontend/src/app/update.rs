@@ -1,16 +1,23 @@
-use crate::api::{ApiService, StorageService};
+//! `App` lifecycle and message dispatch.
+//!
+//! The [`App::create_app`] constructor seeds the initial state and fires the
+//! startup probes; [`App::update_app`] is a one-line dispatcher that hands
+//! each [`Msg`] variant off to the focused handler in
+//! [`crate::app::handlers`].
+
+use crate::api::StorageService;
 use crate::app::{App, Msg};
-use shared_frontend::theme::Theme;
-use shared_frontend::i18n::strings::{lookup, StringKey};
-use shared_frontend::i18n::Language;
-use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 impl App {
+    /// Builds the initial [`App`] state and kicks off the two startup
+    /// probes (`/api/config` and `/api/pin-required`).
     pub fn create_app(ctx: &Context<Self>) -> Self {
         let theme = StorageService::get_theme();
         let locale_state = crate::i18n::get_saved_locale();
 
+        // Apply the persisted theme to the <html> element so the CSS
+        // variables resolve before the first paint.
         if let Some(win) = web_sys::window()
             && let Some(doc) = win.document()
             && let Some(el) = doc.document_element()
@@ -19,27 +26,20 @@ impl App {
             let _ = el.set_attribute("class", &theme);
         }
 
-        let link = ctx.link().clone();
-        spawn_local(async move {
-            if let Ok(config) = ApiService::get_config().await {
-                link.send_message(Msg::LoadConfig(config));
-            }
-        });
-
-        let link = ctx.link().clone();
-        spawn_local(async move {
-            if let Ok(res) = ApiService::check_pin_required().await {
-                link.send_message(Msg::LoadPinRequired(res.required));
-            }
-        });
+        App::spawn_startup_probes(ctx);
 
         Self {
+            // Defaults: optimistic "unauthenticated" with empty strings so
+            // the header doesn't flash a stale version/title before the
+            // /api/config response arrives.
             authenticated: false,
-            app_version: "1.0.26".to_string(),
-            site_title: "Snake".to_string(),
+            app_version: String::new(),
+            site_title: String::new(),
             theme,
             locale_state,
             active_notification: None,
+            // Treat PIN as required until the backend disagrees; this avoids
+            // briefly exposing the game UI to unauthenticated users.
             is_pin_required: true,
             enable_translation: false,
             enable_themes: true,
@@ -49,143 +49,22 @@ impl App {
         }
     }
 
+    /// Routes each [`Msg`] variant to its dedicated handler.
+    ///
+    /// The body of this function is intentionally trivial: every branch
+    /// returns the `bool` from the handler so the framework knows whether
+    /// a re-render is required.
     pub fn update_app(&mut self, ctx: &Context<Self>, msg: Msg) -> bool {
         match msg {
-            Msg::LoadConfig(config) => {
-                self.app_version = config.version;
-                self.site_title = config.site_title.clone();
-                self.enable_translation = config.enable_translation;
-                self.enable_themes = config.enable_themes;
-                self.enable_print = config.enable_print;
-                self.show_version = config.show_version;
-                self.show_github = config.show_github;
-                if !config.enable_themes {
-                    self.theme = "tourian".to_string();
-                    StorageService::set_theme("tourian");
-                    if let Some(win) = web_sys::window()
-                        && let Some(doc) = win.document()
-                        && let Some(el) = doc.document_element()
-                    {
-                        let _ = el.set_attribute("data-theme", "tourian");
-                        let _ = el.set_attribute("class", "tourian");
-                    }
-                }
-                if let Some(win) = web_sys::window()
-                    && let Some(doc) = win.document()
-                {
-                    doc.set_title(&config.site_title);
-                }
-                true
-            }
-            Msg::LoadPinRequired(req) => {
-                self.is_pin_required = req;
-                true
-            }
-            Msg::SetAuthenticated(auth) => {
-                self.authenticated = auth;
-                let lang = Language::from_code(&self.locale_state);
-                if auth {
-                    let pin_success = lookup(StringKey::StatusPinSuccess, lang).to_string();
-                    ctx.link().send_message(Msg::SetStatus(Some((pin_success, "success".to_string()))));
-                    let link = ctx.link().clone();
-                    gloo_timers::callback::Timeout::new(3000, move || {
-                        link.send_message(Msg::SetStatus(None));
-                    }).forget();
-
-                    spawn_local(async move {
-                        let _ = ApiService::get_leaderboard().await;
-                    });
-                } else {
-                    let logout_msg = lookup(StringKey::StatusLogout, lang).to_string();
-                    ctx.link().send_message(Msg::SetStatus(Some((logout_msg, "success".to_string()))));
-                    let link = ctx.link().clone();
-                    gloo_timers::callback::Timeout::new(3000, move || {
-                        link.send_message(Msg::SetStatus(None));
-                    }).forget();
-                }
-                true
-            }
-            Msg::SwitchLanguage(lang) => {
-                crate::i18n::set_saved_locale(&lang);
-                self.locale_state = lang;
-                true
-            }
-            Msg::ToggleTheme => {
-                let current = Theme::from_name(&self.theme).unwrap_or_default();
-                let next = match current {
-                    Theme::Brinstar => Theme::Norfair,
-                    Theme::Norfair => Theme::WreckedShip,
-                    Theme::WreckedShip => Theme::Maridia,
-                    Theme::Maridia => Theme::Tourian,
-                    Theme::Tourian => Theme::Crateria,
-                    Theme::Crateria => Theme::Brinstar,
-                };
-                StorageService::set_theme(next.name());
-                if let Some(html) = web_sys::window()
-                    .and_then(|w| w.document())
-                    .and_then(|d| d.document_element())
-                {
-                    let _ = html.set_attribute("data-theme", next.name());
-                    let _ = html.set_attribute("class", next.name());
-                }
-                self.theme = next.name().to_string();
-                let lang = Language::from_code(&self.locale_state);
-                let theme_msg = lookup(StringKey::StatusThemeChanged, lang).to_string();
-                ctx.link().send_message(Msg::SetStatus(Some((theme_msg, "success".to_string()))));
-                let link = ctx.link().clone();
-                gloo_timers::callback::Timeout::new(3000, move || {
-                    link.send_message(Msg::SetStatus(None));
-                }).forget();
-                true
-            }
-
-            Msg::Logout => {
-                let link = ctx.link().clone();
-                spawn_local(async move {
-                    if ApiService::logout().await.is_ok() {
-                        link.send_message(Msg::SetAuthenticated(false));
-                    }
-                });
-                false
-            }
-            Msg::SetStatus(status) => {
-                self.active_notification = status;
-                true
-            }
-
-            Msg::OnlineStatusChanged(online) => {
-                let lang = Language::from_code(&self.locale_state);
-                let (msg_key, cls) = if online {
-                    (StringKey::StatusOnline, "success")
-                } else {
-                    (StringKey::StatusOffline, "error")
-                };
-                let status_msg = lookup(msg_key, lang).to_string();
-                ctx.link().send_message(Msg::SetStatus(Some((status_msg, cls.to_string()))));
-                let link = ctx.link().clone();
-                gloo_timers::callback::Timeout::new(3000, move || {
-                    link.send_message(Msg::SetStatus(None));
-                }).forget();
-                true
-            }
-            Msg::Print => {
-                if let Some(window) = web_sys::window() {
-                    let print_res = window.print();
-                    let lang = Language::from_code(&self.locale_state);
-                    let (msg_key, cls) = if print_res.is_ok() {
-                        (StringKey::StatusPrintSuccess, "success")
-                    } else {
-                        (StringKey::StatusPrintFailure, "error")
-                    };
-                    let status_msg = lookup(msg_key, lang).to_string();
-                    ctx.link().send_message(Msg::SetStatus(Some((status_msg, cls.to_string()))));
-                    let link = ctx.link().clone();
-                    gloo_timers::callback::Timeout::new(3000, move || {
-                        link.send_message(Msg::SetStatus(None));
-                    }).forget();
-                }
-                false
-            }
+            Msg::LoadConfig(config) => self.handle_load_config(ctx, config),
+            Msg::LoadPinRequired(req) => self.handle_load_pin_required(ctx, req),
+            Msg::SetAuthenticated(auth) => self.handle_set_authenticated(ctx, auth),
+            Msg::SwitchLanguage(lang) => self.handle_switch_language(ctx, lang),
+            Msg::ToggleTheme => self.handle_toggle_theme(ctx),
+            Msg::Logout => self.handle_logout(ctx),
+            Msg::SetStatus(status) => self.handle_set_status(ctx, status),
+            Msg::OnlineStatusChanged(online) => self.handle_online_status_changed(ctx, online),
+            Msg::Print => self.handle_print(ctx),
         }
     }
 }

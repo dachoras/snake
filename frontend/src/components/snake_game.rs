@@ -1,22 +1,32 @@
+//! Top-level game component.
+//!
+//! Composes the score bar, board, overlay, dpad, and leaderboard panel,
+//! and owns the [`SnakeState`](super::snake::state::SnakeState) hook that
+//! keeps them in sync.
+
 use yew::prelude::*;
 
+use super::snake::use_snake_state;
 use super::snake_board::SnakeBoard;
 use super::snake_dpad::MobileDpad;
 use super::snake_leaderboard::LeaderboardPanel;
 use super::snake_overlay::SnakeOverlay;
-use super::snake_state::use_snake_state;
 
 const GRID_SIZE: i32 = 20;
 
+/// Props consumed by [`SnakeGame`].
 #[derive(Properties, PartialEq)]
 pub struct SnakeGameProps {
+    /// Sink for transient status banners surfaced in the footer.
     pub on_status: Callback<Option<(String, String)>>,
 }
 
+/// Snake game root: score header, board with overlays, mobile dpad, and
+/// the leaderboard panel.
 #[function_component(SnakeGame)]
 pub fn snake_game(props: &SnakeGameProps) -> Html {
     let state = use_snake_state(props.on_status.clone());
-    let locale = use_context::<crate::i18n::LocaleContext>().unwrap();
+    let locale = use_context::<crate::i18n::LocaleContext>().expect("LocaleContext provided");
 
     html! {
         <div class="snake-container">

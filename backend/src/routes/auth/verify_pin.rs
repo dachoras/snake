@@ -1,58 +1,56 @@
-use axum::{
-    extract::{ConnectInfo, State},
-    http::HeaderMap,
-    response::IntoResponse,
-};
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+//! `POST /api/verify-pin` — issue a session cookie after PIN validation.
+//!
+//! Accepts a PIN between 4 and 64 characters (inclusive) and returns a
+//! `Set-Cookie` header carrying a fresh session id. The cookie is then
+//! trusted by [`super::is_authenticated`] for subsequent requests.
+//!
+//! ## PIN length policy
+//!
+//! The shared [`shared_backend::server::ServerConfig::pin`] field enforces
+//! the same 4-64 character window, so any value the backend accepts is
+//! also a value the operator chose deliberately. The frontend today only
+//! presents a 4-digit numeric PIN, but the wider range is supported for
+//! future migration without a breaking API change.
+
+use axum::Json;
+use axum::extract::{ConnectInfo, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
+use axum_extra::extract::cookie::CookieJar;
 use shared_backend::auth::attempts;
 use shared_backend::server::get_client_ip;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use super::COOKIE_NAME;
+use super::cookie::build_auth_cookie;
+use crate::error::AppError;
+use crate::services::session::generate_session_id;
 use crate::state::AppState;
 
+const MIN_PIN_LEN: usize = 4;
+const MAX_PIN_LEN: usize = 64;
+
+/// Request body for [`verify_pin`].
 #[derive(serde::Deserialize)]
 pub struct VerifyPinPayload {
+    /// The PIN the client is asserting. 4-64 characters.
     pub pin: String,
 }
 
-pub fn generate_session_id() -> String {
-    use std::fs::File;
-    use std::io::Read;
-    let file = File::open("/dev/urandom").ok();
-    let mut bytes = [0u8; 16];
-    if let Some(mut f) = file
-        && f.read_exact(&mut bytes).is_ok()
-    {
-        return bytes.iter().map(|b| format!("{:02x}", b)).collect();
-    }
-    let random_val = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(random_val.to_string().as_bytes());
-    let result = hasher.finalize();
-    result.iter().map(|b| format!("{:02x}", b)).collect()
-}
-
+/// `POST /api/verify-pin` — validate the PIN and, on success, set the
+/// session cookie. Lockout is enforced via the shared
+/// `attempts::is_locked_out` machinery.
 pub async fn verify_pin(
     headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: CookieJar,
     State(state): State<AppState>,
-    axum::Json(payload): axum::Json<VerifyPinPayload>,
-) -> impl IntoResponse {
-    let pin_req = &state.config.server.pin;
-    if pin_req.is_none() {
-        return (
-            axum::http::StatusCode::OK,
-            axum::Json(serde_json::json!({ "success": true })),
-        )
-            .into_response();
-    }
+    Json(payload): Json<VerifyPinPayload>,
+) -> Result<Response, AppError> {
+    let Some(expected_pin) = state.config.server.pin.clone() else {
+        // No PIN configured — nothing to verify; emit a 200 with no cookie.
+        return Ok((StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response());
+    };
 
     let ip_str = get_client_ip(
         &headers,
@@ -65,76 +63,116 @@ pub async fn verify_pin(
 
     if attempts::is_locked_out(&ip_str, max_attempts, lockout_dur) {
         let remaining = attempts::lockout_remaining_secs(&ip_str, lockout_dur);
-        let time_left_min = (remaining as f64 / 60.0).ceil() as u64;
-
-        return (
-            axum::http::StatusCode::TOO_MANY_REQUESTS,
-            axum::Json(serde_json::json!({
-                "error": format!("Too many attempts. Please try again in {} minute(s).", time_left_min)
+        let time_left_min = remaining.div_ceil(60);
+        tracing::warn!(
+            target: "verify_pin",
+            client_ip = %ip_str,
+            remaining_secs = remaining,
+            "blocked: IP is locked out"
+        );
+        return Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({
+                "error": format!("Too many attempts. Please try again in {time_left_min} minute(s).")
             })),
         )
-            .into_response();
+            .into_response());
     }
 
-    let expected_pin = pin_req.as_ref().unwrap();
-
-    let is_valid_fmt = payload.pin.len() >= 4 && payload.pin.len() <= 64;
-
-    if !is_valid_fmt {
+    if payload.pin.len() < MIN_PIN_LEN || payload.pin.len() > MAX_PIN_LEN {
         attempts::record_attempt(&ip_str);
-        return (
-            axum::http::StatusCode::BAD_REQUEST,
-            axum::Json(serde_json::json!({
+        tracing::info!(
+            target: "verify_pin",
+            client_ip = %ip_str,
+            len = payload.pin.len(),
+            "rejected: PIN outside 4-64 char window"
+        );
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
                 "success": false,
                 "error": "Invalid PIN format"
             })),
         )
-            .into_response();
+            .into_response());
     }
 
-    if constant_time_eq::constant_time_eq(payload.pin.as_bytes(), expected_pin.as_bytes()) {
-        attempts::reset_attempts(&ip_str);
-
-        let session_id = generate_session_id();
-        state
-            .active_sessions
-            .write()
-            .await
-            .insert(session_id.clone());
-
-        let cookie_max_age =
-            Duration::from_secs((state.config.server.cookie_max_age_hours * 3600) as u64);
-        let same_site = SameSite::Strict;
-
-        let secure = headers
-            .get("x-forwarded-proto")
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.eq_ignore_ascii_case("https"))
-            .unwrap_or_else(|| state.config.server.base_url.starts_with("https"));
-
-        let jar = jar.add(
-            Cookie::build((COOKIE_NAME, session_id))
-                .path("/")
-                .http_only(true)
-                .secure(secure)
-                .same_site(same_site)
-                .max_age(cookie_max_age.try_into().unwrap())
-                .build(),
-        );
-
-        (jar, axum::Json(serde_json::json!({ "success": true }))).into_response()
-    } else {
+    if !constant_time_eq::constant_time_eq(payload.pin.as_bytes(), expected_pin.as_bytes()) {
         let attempt = attempts::record_attempt(&ip_str);
         let attempts_left = max_attempts.saturating_sub(attempt.count);
-
-        (
-            axum::http::StatusCode::UNAUTHORIZED,
-            axum::Json(serde_json::json!({
+        tracing::info!(
+            target: "verify_pin",
+            client_ip = %ip_str,
+            attempt = attempt.count,
+            "rejected: PIN mismatch"
+        );
+        return Ok((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
                 "success": false,
                 "error": "Invalid PIN",
-                "attemptsLeft": attempts_left
+                "attemptsLeft": attempts_left,
             })),
         )
-            .into_response()
+            .into_response());
+    }
+
+    attempts::reset_attempts(&ip_str);
+
+    let session_id = generate_session_id();
+    state.register_session(session_id.clone()).await;
+
+    let secure = cookie_should_be_secure(&headers, &state.config.server.base_url);
+    let cookie = build_auth_cookie(
+        &session_id,
+        state.config.server.cookie_max_age_hours,
+        secure,
+    );
+    let jar = jar.add(cookie);
+
+    tracing::info!(
+        target: "verify_pin",
+        client_ip = %ip_str,
+        session_prefix = &session_id[..8.min(session_id.len())],
+        "PIN accepted; session issued"
+    );
+
+    Ok((jar, Json(serde_json::json!({ "success": true }))).into_response())
+}
+
+/// Decide whether the cookie should be marked `Secure`. We trust:
+/// 1. the `X-Forwarded-Proto: https` header (when `trust_proxy` is set), and
+/// 2. the configured `base_url` as a fallback.
+fn cookie_should_be_secure(headers: &HeaderMap, base_url: &str) -> bool {
+    headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.eq_ignore_ascii_case("https"))
+        || base_url.starts_with("https")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cookie_secure_via_xfp() {
+        let mut h = HeaderMap::new();
+        h.insert("x-forwarded-proto", "https".parse().unwrap());
+        assert!(cookie_should_be_secure(&h, "http://example.com"));
+    }
+
+    #[test]
+    fn cookie_secure_via_base_url() {
+        let h = HeaderMap::new();
+        assert!(cookie_should_be_secure(&h, "https://snake.example"));
+        assert!(!cookie_should_be_secure(&h, "http://snake.example"));
+    }
+
+    #[test]
+    fn cookie_secure_handles_uppercase_https_header() {
+        let mut h = HeaderMap::new();
+        h.insert("x-forwarded-proto", "HTTPS".parse().unwrap());
+        assert!(cookie_should_be_secure(&h, "http://snake.example"));
     }
 }

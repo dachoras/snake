@@ -36,6 +36,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+CI enforces these checks on every push and PR — see `.github/workflows/ci.yml`.
+
 ## Pull Request Process
 
 1. Create a new branch from `main`/`master`/`dev`.

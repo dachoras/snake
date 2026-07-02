@@ -1,21 +1,21 @@
-use axum::{extract::State, response::IntoResponse};
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use std::time::Duration;
+//! `POST /api/logout` — revoke the current session and clear the cookie.
+
+use axum::Json;
+use axum::extract::State;
+use axum::response::{IntoResponse, Response};
+use axum_extra::extract::cookie::CookieJar;
 
 use super::COOKIE_NAME;
+use super::cookie::build_clear_cookie;
 use crate::state::AppState;
 
-pub async fn logout(jar: CookieJar, State(state): State<AppState>) -> impl IntoResponse {
+/// Clear the active session and replace the auth cookie with an expired
+/// one. Idempotent: calling logout twice is a no-op the second time.
+pub async fn logout(jar: CookieJar, State(state): State<AppState>) -> Response {
     if let Some(cookie) = jar.get(COOKIE_NAME) {
-        state.active_sessions.write().await.remove(cookie.value());
+        state.revoke_session(cookie.value()).await;
     }
-    let jar = jar.add(
-        Cookie::build((COOKIE_NAME, ""))
-            .path("/")
-            .http_only(true)
-            .same_site(SameSite::Strict)
-            .max_age(Duration::from_secs(0).try_into().unwrap())
-            .build(),
-    );
-    (jar, axum::Json(serde_json::json!({ "success": true }))).into_response()
+    let clear = build_clear_cookie(false);
+    let jar = jar.add(clear);
+    (jar, Json(serde_json::json!({ "success": true }))).into_response()
 }
