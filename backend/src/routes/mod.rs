@@ -89,41 +89,90 @@ fn get_files(dir: &StdPath, base_path: &str, files: &mut Vec<String>) -> std::io
     Ok(())
 }
 
-pub fn generate_pwa_manifest(site_title: &str, public_dir: &StdPath) -> std::io::Result<()> {
-    let assets_dir = public_dir.join("Assets");
-    std::fs::create_dir_all(&assets_dir)?;
-
+pub async fn serve_asset_manifest(State(_state): State<AppState>) -> impl IntoResponse {
+    let public_dir = StdPath::new("frontend/dist");
     let mut files = Vec::new();
-    get_files(public_dir, "", &mut files)?;
+    if let Err(e) = get_files(public_dir, "", &mut files) {
+        return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Error scanning assets: {}", e),
+        )
+            .into_response();
+    }
+    files.push("/asset-manifest.json".to_string());
 
-    let json_files = serde_json::to_string_pretty(&files)?;
-    std::fs::write(public_dir.join("asset-manifest.json"), json_files)?;
-
-    let pwa_manifest = serde_json::json!({
-        "name": site_title,
-        "short_name": site_title,
-        "description": "A simple notepad application",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#ffffff",
-        "theme_color": "#000000",
-        "icons": [
-            {
-                "src": "log.png",
-                "type": "image/png",
-                "sizes": "192x192"
-            },
-            {
-                "src": "log.png",
-                "type": "image/png",
-                "sizes": "512x512"
-            }
+    (
+        [
+            (axum::http::header::CONTENT_TYPE, "application/json"),
+            (
+                axum::http::header::CACHE_CONTROL,
+                "no-cache, no-store, must-revalidate",
+            ),
         ],
-        "orientation": "any"
-    });
-    let json_pwa = serde_json::to_string_pretty(&pwa_manifest)?;
-    std::fs::write(assets_dir.join("manifest.json"), json_pwa)?;
+        axum::Json(files),
+    )
+        .into_response()
+}
 
-    println!("Asset and PWA manifests generated dynamically!");
-    Ok(())
+pub async fn serve_manifest(State(state): State<AppState>) -> impl IntoResponse {
+    let manifest_path = StdPath::new("frontend/dist/Assets/manifest.json");
+    let content = fs::read_to_string(&manifest_path).await.unwrap_or_else(|_| {
+        r##"{
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#000000",
+            "icons": [
+                {
+                    "src": "logo.png",
+                    "type": "image/png",
+                    "sizes": "192x192"
+                },
+                {
+                    "src": "logo.png",
+                    "type": "image/png",
+                    "sizes": "512x512"
+                }
+            ],
+            "orientation": "any"
+        }"##.to_string()
+    });
+
+    let mut val: serde_json::Value = serde_json::from_str(&content).unwrap_or_else(|_| {
+        serde_json::json!({
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#000000",
+            "icons": [
+                {
+                    "src": "logo.png",
+                    "type": "image/png",
+                    "sizes": "192x192"
+                },
+                {
+                    "src": "logo.png",
+                    "type": "image/png",
+                    "sizes": "512x512"
+                }
+            ],
+            "orientation": "any"
+        })
+    });
+
+    val["name"] = serde_json::Value::String(state.config.server.site_title.clone());
+    val["short_name"] = serde_json::Value::String(state.config.server.site_title.clone());
+    val["description"] = serde_json::Value::String("A traditional arcade snake game".to_string());
+
+    (
+        [
+            (axum::http::header::CONTENT_TYPE, "application/json"),
+            (
+                axum::http::header::CACHE_CONTROL,
+                "no-cache, no-store, must-revalidate",
+            ),
+        ],
+        axum::Json(val),
+    )
+        .into_response()
 }

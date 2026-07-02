@@ -1,6 +1,6 @@
 use axum::{
     Router, middleware,
-    routing::{get, post, put},
+    routing::{get, post},
 };
 use shared_backend::middleware::{HstsState, cors_layer, hsts_layer, security_headers_layer};
 use std::collections::HashMap;
@@ -85,12 +85,10 @@ async fn main() {
         .unwrap_or(4501);
 
     let config = AppConfig::load_from_env(port);
-    let site_title = config.server.site_title.clone();
 
     let root_path = PathBuf::from(".");
     let data_dir = root_path.join("data");
-    let notepads_file = data_dir.join("notepads.json");
-    let public_dir = root_path.join("frontend/dist");
+    let leaderboard_file = data_dir.join("leaderboard.json");
 
     // Initialize state. Note: `login_attempts` is intentionally absent — PIN
     // brute-force lockouts are now global via `shared_backend::auth::attempts`
@@ -98,24 +96,15 @@ async fn main() {
     let state: AppState = Arc::new(AppStateInner {
         config,
         data_dir,
-        notepads_file,
-        clients: RwLock::new(HashMap::new()),
-        operations_history: RwLock::new(HashMap::new()),
+        leaderboard_file,
         active_sessions: RwLock::new(std::collections::HashSet::new()),
         rate_limiter: RwLock::new(HashMap::new()),
-        notepads: RwLock::new(Vec::new()),
-        index_items: RwLock::new(Vec::new()),
     });
 
     // Run migrations and load list
     if let Err(e) = state.ensure_data_dir().await {
         eprintln!("Error initializing data directory: {}", e);
         std::process::exit(1);
-    }
-
-    // Build PWA assets
-    if let Err(e) = generate_pwa_manifest(&site_title, &public_dir) {
-        eprintln!("Failed to generate manifests: {}", e);
     }
 
     // Background cleanup for the per-IP request budget only. PIN-attempt
@@ -158,6 +147,8 @@ async fn main() {
         .route("/", get(serve_root))
         .route("/login", get(serve_login))
         .route("/service-worker.js", get(serve_service_worker))
+        .route("/asset-manifest.json", get(serve_asset_manifest))
+        .route("/Assets/manifest.json", get(serve_manifest))
         .nest("/api", merged_api)
         .route("/health", get(health_check))
         .fallback_service(

@@ -1,5 +1,3 @@
-use axum::extract::ws::Message;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::PathBuf;
@@ -7,24 +5,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::fs;
 use tokio::sync::RwLock;
-use tokio::sync::mpsc::UnboundedSender;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Notepad {
-    pub id: String,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IndexedItem {
-    pub id: String,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NotepadsJson {
-    pub notepads: Vec<Notepad>,
-}
 
 pub use crate::config::AppConfig;
 
@@ -32,13 +12,7 @@ pub struct AppStateInner {
     // Config
     pub config: AppConfig,
     pub data_dir: PathBuf,
-    pub notepads_file: PathBuf,
-
-    // Real-time clients map: userId -> UnboundedSender<Message>
-    pub clients: RwLock<HashMap<String, UnboundedSender<Message>>>,
-
-    // Operational Transformation (OT) history map: notepadId -> Operations
-    pub operations_history: RwLock<HashMap<String, Vec<serde_json::Value>>>,
+    pub leaderboard_file: PathBuf,
 
     // Active session IDs cache (random tokens, never the PIN).
     pub active_sessions: RwLock<std::collections::HashSet<String>>,
@@ -47,10 +21,6 @@ pub struct AppStateInner {
     // brute-force lockouts, which now live in `shared_backend::auth::attempts`
     // and are global to the process).
     pub rate_limiter: RwLock<HashMap<IpAddr, Vec<Instant>>>,
-
-    // Notepad metadata and index cache
-    pub notepads: RwLock<Vec<Notepad>>,
-    pub index_items: RwLock<Vec<IndexedItem>>,
 }
 
 pub type AppState = Arc<AppStateInner>;
@@ -59,36 +29,13 @@ impl AppStateInner {
     pub async fn ensure_data_dir(&self) -> Result<(), std::io::Error> {
         fs::create_dir_all(&self.data_dir).await?;
 
-        if fs::metadata(&self.notepads_file).await.is_err() {
-            println!("Creating new notepads.json");
-            let default_data = NotepadsJson {
-                notepads: vec![Notepad {
-                    id: "default".to_string(),
-                    name: "default".to_string(),
-                }],
-            };
-            let content = serde_json::to_string_pretty(&default_data)?;
-            fs::write(&self.notepads_file, content).await?;
-        } else {
-            // Validate structure
-            let content = fs::read_to_string(&self.notepads_file).await?;
-            if let Err(e) = serde_json::from_str::<NotepadsJson>(&content) {
-                eprintln!("Invalid notepads.json, recreating: {}", e);
-                let default_data = NotepadsJson {
-                    notepads: vec![Notepad {
-                        id: "default".to_string(),
-                        name: "default".to_string(),
-                    }],
-                };
-                let content = serde_json::to_string_pretty(&default_data)?;
-                fs::write(&self.notepads_file, content).await?;
-            }
+        if fs::metadata(&self.leaderboard_file).await.is_err() {
+            println!("Initializing empty leaderboard.json");
+            fs::write(&self.leaderboard_file, "[]").await?;
         }
 
         Ok(())
     }
-
-
 
     pub async fn check_rate_limit(&self, ip: IpAddr) -> bool {
         let max_requests = 100; // 100 requests
