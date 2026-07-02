@@ -1,18 +1,18 @@
 services:
-  pad:
-    image: ubermetroid/pad:latest
-    container_name: pad
+  snake:
+    image: ubermetroid/snake:latest
+    container_name: snake
     restart: unless-stopped
     ports:
-      - ${PORT:-4402}:4402
+      - ${PORT:-4501}:4501
     volumes:
-      - ${PAD_DATA_PATH:-./data}:/app/data
+      - ${SNAKE_DATA_PATH:-./data}:/app/data
     environment:
-      PORT: 4402
-      SITE_TITLE: ${PAD_SITE_TITLE:-Pad}
-      PAD_PIN: ${PAD_PIN:-}
-      BASE_URL: ${PAD_BASE_URL:-http://localhost:4402}
-      ALLOWED_ORIGINS: ${PAD_ALLOWED_ORIGINS:-*}
+      PORT: 4501
+      SITE_TITLE: ${SNAKE_SITE_TITLE:-Snake}
+      SNAKE_PIN: ${SNAKE_PIN:-}
+      BASE_URL: ${SNAKE_BASE_URL:-http://localhost:4501}
+      ALLOWED_ORIGINS: ${SNAKE_ALLOWED_ORIGINS:-*}
       TZ: ${TZ:-UTC}
       ENABLE_TRANSLATION: ${ENABLE_TRANSLATION:-false}
       ENABLE_THEMES: ${ENABLE_THEMES:-true}

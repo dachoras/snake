@@ -1,7 +1,7 @@
 # Snake - Traditional Arcade Game
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/UberMetroid/snake/main/assets/logo.png?v=1.0.24" alt="Snake Logo" width="128" height="128">
+  <img src="https://raw.githubusercontent.com/UberMetroid/snake/main/assets/logo.png?v=1.0.25" alt="Snake Logo" width="128" height="128">
 </p>
 
 ## Overview
@@ -41,13 +41,13 @@ services:
     container_name: snake
     restart: unless-stopped
     ports:
-      - 4407:4407
+      - 4501:4501
     volumes:
       - ./data:/app/data
     environment:
-      - PORT=4407
+      - PORT=4501
       - SITE_TITLE=Snake
-      - BASE_URL=http://localhost:4407
+      - BASE_URL=http://localhost:4501
       - ALLOWED_ORIGINS=*
       - SNAKE_PIN=1234
       - TZ=UTC
@@ -62,7 +62,7 @@ services:
 docker compose up -d
 ```
 
-3. Open your browser and navigate to `http://localhost:4407`.
+3. Open your browser and navigate to `http://localhost:4501`.
 
 ### Building the Image Locally
 
@@ -104,9 +104,9 @@ Configure these settings inside your Docker Compose environment or container env
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `PORT` | The port number the backend HTTP server will bind to inside the container. | `4407` |
+| `PORT` | The port number the backend HTTP server will bind to inside the container. | `4501` |
 | `SITE_TITLE` | Custom website title rendered in navigation headers, browser tabs, and PWA manifest. | `Snake` |
-| `BASE_URL` | Application base URL. | `http://localhost:4407` |
+| `BASE_URL` | Application base URL. | `http://localhost:4501` |
 | `ALLOWED_ORIGINS` | Comma-separated list of allowed HTTP request origins (CORS filter). Use `*` to allow all origins. | `*` |
 | `SNAKE_PIN` | Optional 4–10 digit PIN (numerical only) to lock access to the interface. Leave empty for public mode. *(Supports fallback `PIN`)* | None |
 | `TZ` | Timezone for the container processes and logs. | `UTC` |

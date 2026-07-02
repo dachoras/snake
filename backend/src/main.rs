@@ -82,7 +82,7 @@ async fn main() {
     let port = std::env::var("PORT")
         .ok()
         .and_then(|s| s.parse::<u16>().ok())
-        .unwrap_or(4407);
+        .unwrap_or(4501);
 
     let config = AppConfig::load_from_env(port);
     let site_title = config.server.site_title.clone();

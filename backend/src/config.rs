@@ -24,7 +24,7 @@ impl AppConfig {
         let mut server = ServerConfig::from_env("Snake");
         // Snake's load_from_env signature takes port; override the shared default
         // with the caller's value if it differs from the default.
-        if server.port == 4407 && port != 4407 {
+        if server.port == 4501 && port != 4501 {
             server.port = port;
         }
 
