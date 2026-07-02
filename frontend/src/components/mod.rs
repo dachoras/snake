@@ -7,3 +7,5 @@ pub mod snake_leaderboard;
 pub mod snake_dpad;
 pub mod snake_board;
 pub mod snake_overlay;
+pub mod snake_logic;
+pub mod snake_state;

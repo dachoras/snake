@@ -18,18 +18,18 @@ pub fn leaderboard_panel(props: &LeaderboardPanelProps) -> Html {
                         html! { <div class="leaderboard-empty">{locale.t("no_scores")}</div> }
                     } else {
                         html! {
-                            <ol class="leaderboard-ol">
+                            <ul class="leaderboard-ol">
                                 {
-                                    for props.leaderboard.iter().enumerate().map(|(idx, entry)| {
+                                    for props.leaderboard.iter().take(3).enumerate().map(|(idx, entry)| {
                                         html! {
                                             <li key={idx} class="leaderboard-item">
-                                                <span class="leader-name">{&entry.name}</span>
+                                                <span class="leader-name">{format!("{}. {}", idx + 1, entry.name)}</span>
                                                 <span class="leader-score">{entry.score}</span>
                                             </li>
                                         }
                                     })
                                 }
-                            </ol>
+                            </ul>
                         }
                     }
                 }
