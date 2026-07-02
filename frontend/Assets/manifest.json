@@ -1,0 +1,22 @@
+{
+  "background_color": "#ffffff",
+  "description": "A simple notepad application",
+  "display": "standalone",
+  "icons": [
+    {
+      "sizes": "192x192",
+      "src": "log.png",
+      "type": "image/png"
+    },
+    {
+      "sizes": "512x512",
+      "src": "log.png",
+      "type": "image/png"
+    }
+  ],
+  "name": "Log",
+  "orientation": "any",
+  "short_name": "Log",
+  "start_url": "/",
+  "theme_color": "#000000"
+}

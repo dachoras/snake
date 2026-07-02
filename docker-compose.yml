@@ -1,0 +1,20 @@
+services:
+  pad:
+    image: ubermetroid/pad:latest
+    container_name: pad
+    restart: unless-stopped
+    ports:
+      - ${PORT:-4402}:4402
+    volumes:
+      - ${PAD_DATA_PATH:-./data}:/app/data
+    environment:
+      PORT: 4402
+      SITE_TITLE: ${PAD_SITE_TITLE:-Pad}
+      PAD_PIN: ${PAD_PIN:-}
+      BASE_URL: ${PAD_BASE_URL:-http://localhost:4402}
+      ALLOWED_ORIGINS: ${PAD_ALLOWED_ORIGINS:-*}
+      TZ: ${TZ:-UTC}
+      ENABLE_TRANSLATION: ${ENABLE_TRANSLATION:-false}
+      ENABLE_THEMES: ${ENABLE_THEMES:-true}
+      ENABLE_PRINT: ${ENABLE_PRINT:-true}
+      MAX_ATTEMPTS: ${MAX_ATTEMPTS:-5}
