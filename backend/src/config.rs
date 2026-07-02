@@ -1,13 +1,13 @@
-//! Pad-specific configuration layered on top of shared [`ServerConfig`].
+//! Snake-specific configuration layered on top of shared [`ServerConfig`].
 //!
-//! Pad adds three fields beyond the shared baseline:
+//! Snake adds three fields beyond the shared baseline:
 //! - `page_history_cookie_age_days` — undo-history persistence
 //! - `node_env` — dev/prod env hint
 //! - `version` — CARGO_PKG_VERSION snapshot
 
 use shared_backend::server::ServerConfig;
 
-/// Pad application configuration. Wraps [`ServerConfig`] with pad-specific
+/// Snake application configuration. Wraps [`ServerConfig`] with snake-specific
 /// retention and version fields.
 #[derive(Clone, Debug)]
 pub struct AppConfig {
@@ -21,10 +21,10 @@ impl AppConfig {
     /// Build a config by combining shared [`ServerConfig::from_env`] with
     /// pad-specific env parsing.
     pub fn load_from_env(port: u16) -> Self {
-        let mut server = ServerConfig::from_env("PAD");
-        // Pad's load_from_env signature takes port; override the shared default
+        let mut server = ServerConfig::from_env("Snake");
+        // Snake's load_from_env signature takes port; override the shared default
         // with the caller's value if it differs from the default.
-        if server.port == 4401 && port != 4401 {
+        if server.port == 4407 && port != 4407 {
             server.port = port;
         }
 
