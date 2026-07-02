@@ -81,16 +81,16 @@
       "locked": {
         "lastModified": 1783014676,
         "narHash": "sha256-oGbq9cFo2sGByGl3KBYyz6H9OSiVfRrDMHcoV1Kjk9g=",
-        "ref": "v3.0.17",
+        "owner": "UberMetroid",
+        "repo": "shared-assets",
         "rev": "cc842eaad98f11f669ce103cd9a3e9daad448b41",
-        "revCount": 62,
-        "type": "git",
-        "url": "file:///home/jeryd/Projects/ubermetroid/shared-assets"
+        "type": "github"
       },
       "original": {
+        "owner": "UberMetroid",
         "ref": "v3.0.17",
-        "type": "git",
-        "url": "file:///home/jeryd/Projects/ubermetroid/shared-assets"
+        "repo": "shared-assets",
+        "type": "github"
       }
     },
     "systems": {
