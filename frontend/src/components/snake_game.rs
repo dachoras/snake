@@ -286,11 +286,11 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
                 <div class="game-board-container">
                     <div class="score-board">
                         <div class="score-stat">
-                            <span class="label">{"SCORE:"}</span>
+                            <span class="label">{format!("{}:", locale.t("score"))}</span>
                             <span class="value">{*score}</span>
                         </div>
                         <div class="score-stat">
-                            <span class="label">{"HIGH:"}</span>
+                            <span class="label">{format!("{}:", locale.t("high_score"))}</span>
                             <span class="value">{*high_score}</span>
                         </div>
                     </div>
@@ -330,19 +330,19 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
                             html! {
                                 <div class="overlay start-overlay">
                                     <h2>{"SNAKE"}</h2>
-                                    <button onclick={on_restart} class="btn-start">{"PRESS START"}</button>
+                                    <button onclick={on_restart} class="btn-start">{locale.t("press_start")}</button>
                                 </div>
                             }
                         } else if *game_over {
                             html! {
                                 <div class="overlay gameover-overlay">
-                                    <h2>{"GAME OVER"}</h2>
-                                    <p class="score-summary">{format!("Final Score: {}", *score)}</p>
+                                    <h2>{locale.t("game_over")}</h2>
+                                    <p class="score-summary">{format!("{}: {}", locale.t("final_score"), *score)}</p>
 
                                     <form onsubmit={on_submit_score} class="submit-score-form">
                                         <input
                                             type="text"
-                                            placeholder="Enter your name"
+                                            placeholder={locale.t("enter_name")}
                                             value={(*player_name).clone()}
                                             oninput={
                                                 let player_name = player_name.clone();
@@ -356,21 +356,21 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
                                             required=true
                                         />
                                         <button type="submit" class="btn-submit" disabled={*submitting}>
-                                            {if *submitting { "Submitting..." } else { "Submit Score" }}
+                                            {if *submitting { locale.t("submitting") } else { locale.t("submit_score") }}
                                         </button>
                                     </form>
 
-                                    <button onclick={on_restart} class="btn-restart">{"PLAY AGAIN"}</button>
+                                    <button onclick={on_restart} class="btn-restart">{locale.t("play_again")}</button>
                                 </div>
                             }
                         } else if *paused {
                             html! {
                                 <div class="overlay pause-overlay">
-                                    <h2>{"PAUSED"}</h2>
+                                    <h2>{locale.t("paused")}</h2>
                                     <button onclick={
                                         let paused = paused.clone();
                                         Callback::from(move |_| paused.set(false))
-                                    } class="btn-resume">{"RESUME"}</button>
+                                    } class="btn-resume">{locale.t("resume")}</button>
                                 </div>
                             }
                         } else {
@@ -396,11 +396,11 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
 
                 // Sidebar leaderboard
                 <div class="leaderboard-panel">
-                    <h3>{"LEADERBOARD"}</h3>
+                    <h3>{locale.t("leaderboard")}</h3>
                     <div class="leaderboard-list">
                         {
                             if leaderboard.is_empty() {
-                                html! { <div class="leaderboard-empty">{"No high scores yet."}</div> }
+                                html! { <div class="leaderboard-empty">{locale.t("no_scores")}</div> }
                             } else {
                                 html! {
                                     <ol class="leaderboard-ol">
