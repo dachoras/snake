@@ -1,8 +1,10 @@
 # Snake - Traditional Arcade Game
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/UberMetroid/unraid-templates/main/icons/snake.png?v=1.0.17" alt="Snake Logo" width="128" height="128">
+  <img src="https://raw.githubusercontent.com/UberMetroid/unraid-templates/main/icons/snake.png?v=1.0.18" alt="Snake Logo" width="128" height="128">
 </p>
+
+## Overview
 
 Snake is a self-hosted traditional arcade-style snake game application designed for home servers and NAS systems. Built with a high-performance Rust (Axum/Tokio) backend and a WebAssembly (Yew) frontend.
 
@@ -11,6 +13,7 @@ Snake is a self-hosted traditional arcade-style snake game application designed 
 ## Key Features
 
 *   **Traditional Arcade Loop**: Classic gameplay with grid rendering, score tracking, and persistent high scores.
+*   **Gold Food Mode**: 15% spawn chance of a flashing Gold Food that expires in 5 seconds (with a dynamic visual countdown bar) and awards +30 points.
 *   **High Score Leaderboard**: Persists the Top 10 player scores using simple file-based JSON storage (`leaderboard.json`).
 *   **Sleek Neon Theme**: Dark retro-futuristic styling matching the Super Metroid theme design system.
 *   **Mobile-Friendly D-Pad**: Integrated touch/D-Pad controls overlay for easy play on mobile and tablets.
@@ -78,6 +81,22 @@ For development iteration, use the devShell:
 ```bash
 nix develop
 ```
+
+---
+
+## Flake Installation
+
+You can also run or install Snake directly using Nix flakes:
+
+```bash
+# Run the application directly
+nix run github:UberMetroid/snake --impure
+
+# Install to your user profile
+nix profile install github:UberMetroid/snake --impure
+```
+
+---
 
 ## Configuration Options
 

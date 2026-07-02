@@ -165,6 +165,31 @@ main {
     }
 }
 
+.gold-timer-container {
+    height: 4px;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    border-radius: 4px 4px 0 0;
+    overflow: hidden;
+}
+
+.gold-timer-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #ffd700, #ff8c00);
+    width: 100%;
+    animation: shrinkBar 5s linear forwards;
+    box-shadow: 0 0 8px #ffd700;
+}
+
+@keyframes shrinkBar {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+
 /* Overlays */
 .overlay {
     position: absolute;
