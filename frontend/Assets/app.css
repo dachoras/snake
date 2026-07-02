@@ -112,6 +112,30 @@ main {
     width: 400px;
     height: 400px;
     background: rgba(0, 0, 0, 0.4);
+    transition: width 0.3s ease, height 0.3s ease;
+}
+
+.game-wrapper.playing {
+    max-width: 600px;
+}
+
+.game-wrapper.playing .game-grid {
+    width: 550px;
+    height: 550px;
+}
+
+@media (max-width: 600px) {
+    .game-wrapper.playing .game-grid {
+        width: 350px;
+        height: 350px;
+    }
+}
+
+@media (max-width: 400px) {
+    .game-wrapper.playing .game-grid {
+        width: 280px;
+        height: 280px;
+    }
 }
 
 @media (max-width: 480px) {

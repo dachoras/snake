@@ -2,3 +2,8 @@ pub mod snake_game;
 pub mod footer;
 pub mod header;
 pub mod pin;
+pub mod event_listener;
+pub mod snake_leaderboard;
+pub mod snake_dpad;
+pub mod snake_board;
+pub mod snake_overlay;

@@ -5,6 +5,12 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
+use super::event_listener::EventListener;
+use super::snake_board::SnakeBoard;
+use super::snake_dpad::MobileDpad;
+use super::snake_leaderboard::LeaderboardPanel;
+use super::snake_overlay::SnakeOverlay;
+
 const GRID_SIZE: i32 = 20;
 
 #[derive(Properties, PartialEq)]
@@ -35,10 +41,9 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
     let leaderboard = use_state(|| Vec::<LeaderboardEntry>::new());
     let player_name = use_state(|| "".to_string());
     let submitting = use_state(|| false);
-
     let locale = use_context::<crate::i18n::LocaleContext>().unwrap();
 
-    // Fetch leaderboard on load and game over
+    // Fetch leaderboard on load
     {
         let leaderboard = leaderboard.clone();
         use_effect_with((), move |_| {
@@ -60,15 +65,9 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
         let locale = locale.clone();
         use_effect_with((score_val, game_over_val), move |&(s, go)| {
             if go {
-                on_status.emit(Some((
-                    locale.t("game_over"),
-                    "error".to_string(),
-                )));
+                on_status.emit(Some((locale.t("game_over"), "error".to_string())));
             } else {
-                on_status.emit(Some((
-                    format!("Score: {}", s),
-                    "success".to_string(),
-                )));
+                on_status.emit(Some((format!("Score: {}", s), "success".to_string())));
             }
             || ()
         });
@@ -129,30 +128,25 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
             let listener = EventListener::new(&web_sys::window().unwrap(), "keydown", move |e| {
                 let key_event = e.dyn_ref::<web_sys::KeyboardEvent>().unwrap();
                 let key = key_event.key();
-
                 if go {
                     if key == "Enter" || key == " " {
                         on_restart.emit(MouseEvent::new("click").unwrap());
                     }
                     return;
                 }
-
                 if !st {
                     if key == "Enter" || key == " " || key.starts_with("Arrow") {
                         started.set(true);
                     }
                     return;
                 }
-
                 if key == "Escape" || key == "p" || key == "P" {
                     paused.set(!ps);
                     return;
                 }
-
                 if ps {
                     return;
                 }
-
                 let current_dir = *dir;
                 let new_dir = match key.as_str() {
                     "ArrowUp" | "w" | "W" if current_dir.1 != 1 => Some((0, -1)),
@@ -161,7 +155,6 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
                     "ArrowRight" | "d" | "D" if current_dir.0 != -1 => Some((1, 0)),
                     _ => None,
                 };
-
                 if let Some(nd) = new_dir {
                     key_event.prevent_default();
                     next_dir.set(nd);
@@ -185,61 +178,48 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
         let is_game_over = *game_over;
         let generate_food = generate_food.clone();
 
-        use_effect_with(
-            (is_started, is_paused, is_game_over),
-            move |&(st, ps, go)| {
-                if !st || ps || go {
-                    return Box::new(|| ()) as Box<dyn FnOnce()>;
+        use_effect_with((is_started, is_paused, is_game_over), move |&(st, ps, go)| {
+            if !st || ps || go {
+                return Box::new(|| ()) as Box<dyn FnOnce()>;
+            }
+            let interval = Interval::new(150, move || {
+                let current_dir = *next_dir;
+                dir.set(current_dir);
+                let current_snake = (*snake).clone();
+                let head = current_snake[0];
+                let new_head = (head.0 + current_dir.0, head.1 + current_dir.1);
+
+                if new_head.0 < 0 || new_head.0 >= GRID_SIZE || new_head.1 < 0 || new_head.1 >= GRID_SIZE {
+                    game_over.set(true);
+                    return;
+                }
+                if current_snake.iter().any(|&pos| pos == new_head) {
+                    game_over.set(true);
+                    return;
                 }
 
-                let interval = Interval::new(150, move || {
-                    let current_dir = *next_dir;
-                    dir.set(current_dir);
+                let mut next_snake = vec![new_head];
+                next_snake.extend_from_slice(&current_snake);
 
-                    let current_snake = (*snake).clone();
-                    let head = current_snake[0];
-                    let new_head = (head.0 + current_dir.0, head.1 + current_dir.1);
-
-                    // Check wall collision
-                    if new_head.0 < 0 || new_head.0 >= GRID_SIZE || new_head.1 < 0 || new_head.1 >= GRID_SIZE {
-                        game_over.set(true);
-                        return;
-                    }
-
-                    // Check self collision
-                    if current_snake.iter().any(|&pos| pos == new_head) {
-                        game_over.set(true);
-                        return;
-                    }
-
-                    let mut next_snake = vec![new_head];
-                    next_snake.extend_from_slice(&current_snake);
-
-                    // Check food eating
-                    if new_head == *food {
-                        let new_score = *score + 10;
-                        score.set(new_score);
-
-                        if new_score > *high_score {
-                            high_score.set(new_score);
-                            if let Some(win) = web_sys::window()
-                                && let Ok(Some(storage)) = win.local_storage()
-                            {
-                                let _ = storage.set_item("snake_high_score", &new_score.to_string());
-                            }
+                if new_head == *food {
+                    let new_score = *score + 10;
+                    score.set(new_score);
+                    if new_score > *high_score {
+                        high_score.set(new_score);
+                        if let Some(win) = web_sys::window()
+                            && let Ok(Some(storage)) = win.local_storage()
+                        {
+                            let _ = storage.set_item("snake_high_score", &new_score.to_string());
                         }
-
-                        food.set(generate_food());
-                    } else {
-                        next_snake.pop();
                     }
-
-                    snake.set(next_snake);
-                });
-
-                Box::new(move || drop(interval))
-            },
-        );
+                    food.set(generate_food());
+                } else {
+                    next_snake.pop();
+                }
+                snake.set(next_snake);
+            });
+            Box::new(move || drop(interval))
+        });
     }
 
     // Submit leaderboard score
@@ -268,7 +248,6 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
         })
     };
 
-    // On-screen D-Pad click handlers
     let set_next_dir = {
         let next_dir = next_direction.clone();
         let dir = direction.clone();
@@ -280,9 +259,33 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
         }
     };
 
+    let on_name_input = {
+        let player_name = player_name.clone();
+        Callback::from(move |e: InputEvent| {
+            let input = e.target_dyn_into::<HtmlInputElement>().unwrap();
+            player_name.set(input.value());
+        })
+    };
+
+    let on_resume = {
+        let paused = paused.clone();
+        Callback::from(move |_| paused.set(false))
+    };
+
+    let on_dpad_press = {
+        let set_dir = set_next_dir.clone();
+        Callback::from(move |(dx, dy)| set_dir(dx, dy))
+    };
+
+    let wrapper_class = if *started && !*game_over {
+        "game-wrapper playing"
+    } else {
+        "game-wrapper"
+    };
+
     html! {
         <div class="snake-container">
-            <div class="game-wrapper">
+            <div class={wrapper_class}>
                 <div class="game-board-container">
                     <div class="score-board">
                         <div class="score-stat">
@@ -296,166 +299,30 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
                     </div>
 
                     <div class="board-relative-wrapper">
-                        <div class="game-grid">
-                            {
-                                for (0..GRID_SIZE).map(|y| {
-                                    html! {
-                                        <div class="grid-row" key={y}>
-                                            {
-                                                for (0..GRID_SIZE).map(|x| {
-                                                    let is_snake_head = (*snake)[0] == (x, y);
-                                                    let is_snake_body = !is_snake_head && snake.iter().any(|&pos| pos == (x, y));
-                                                    let is_food = *food == (x, y);
-
-                                                    let cell_class = if is_snake_head {
-                                                        "grid-cell snake-head"
-                                                    } else if is_snake_body {
-                                                        "grid-cell snake-body"
-                                                    } else if is_food {
-                                                        "grid-cell food"
-                                                    } else {
-                                                        "grid-cell"
-                                                    };
-
-                                                    html! { <div class={cell_class} key={x}></div> }
-                                                })
-                                            }
-                                        </div>
-                                    }
-                                })
-                            }
-                        </div>
-
-                        {if !*started {
-                            html! {
-                                <div class="overlay start-overlay">
-                                    <h2>{"SNAKE"}</h2>
-                                    <button onclick={on_restart} class="btn-start">{locale.t("press_start")}</button>
-                                </div>
-                            }
-                        } else if *game_over {
-                            html! {
-                                <div class="overlay gameover-overlay">
-                                    <h2>{locale.t("game_over")}</h2>
-                                    <p class="score-summary">{format!("{}: {}", locale.t("final_score"), *score)}</p>
-
-                                    <form onsubmit={on_submit_score} class="submit-score-form">
-                                        <input
-                                            type="text"
-                                            placeholder={locale.t("enter_name")}
-                                            value={(*player_name).clone()}
-                                            oninput={
-                                                let player_name = player_name.clone();
-                                                Callback::from(move |e: InputEvent| {
-                                                    let input = e.target_dyn_into::<HtmlInputElement>().unwrap();
-                                                    player_name.set(input.value());
-                                                })
-                                            }
-                                            class="name-input"
-                                            maxlength="15"
-                                            required=true
-                                        />
-                                        <button type="submit" class="btn-submit" disabled={*submitting}>
-                                            {if *submitting { locale.t("submitting") } else { locale.t("submit_score") }}
-                                        </button>
-                                    </form>
-
-                                    <button onclick={on_restart} class="btn-restart">{locale.t("play_again")}</button>
-                                </div>
-                            }
-                        } else if *paused {
-                            html! {
-                                <div class="overlay pause-overlay">
-                                    <h2>{locale.t("paused")}</h2>
-                                    <button onclick={
-                                        let paused = paused.clone();
-                                        Callback::from(move |_| paused.set(false))
-                                    } class="btn-resume">{locale.t("resume")}</button>
-                                </div>
-                            }
-                        } else {
-                            html! {}
-                        }}
+                        <SnakeBoard snake={(*snake).clone()} food={*food} grid_size={GRID_SIZE} />
+                        <SnakeOverlay
+                            started={*started}
+                            game_over={*game_over}
+                            paused={*paused}
+                            score={*score}
+                            submitting={*submitting}
+                            player_name={(*player_name).clone()}
+                            on_restart={on_restart}
+                            on_submit_score={on_submit_score}
+                            on_name_input={on_name_input}
+                            on_resume={on_resume}
+                        />
                     </div>
 
-                    // Visual controls for mobile/touch users
-                    <div class="mobile-dpad">
-                        <div class="dpad-row">
-                            <button onclick={let set_dir = set_next_dir.clone(); Callback::from(move |_| set_dir(0, -1))} class="dpad-btn up">{"▲"}</button>
-                        </div>
-                        <div class="dpad-row middle">
-                            <button onclick={let set_dir = set_next_dir.clone(); Callback::from(move |_| set_dir(-1, 0))} class="dpad-btn left">{"◀"}</button>
-                            <div class="dpad-center"></div>
-                            <button onclick={let set_dir = set_next_dir.clone(); Callback::from(move |_| set_dir(1, 0))} class="dpad-btn right">{"▶"}</button>
-                        </div>
-                        <div class="dpad-row">
-                            <button onclick={let set_dir = set_next_dir.clone(); Callback::from(move |_| set_dir(0, 1))} class="dpad-btn down">{"▼"}</button>
-                        </div>
-                    </div>
+                    <MobileDpad on_press={on_dpad_press} />
                 </div>
 
-                // Sidebar leaderboard
-                <div class="leaderboard-panel">
-                    <h3>{locale.t("leaderboard")}</h3>
-                    <div class="leaderboard-list">
-                        {
-                            if leaderboard.is_empty() {
-                                html! { <div class="leaderboard-empty">{locale.t("no_scores")}</div> }
-                            } else {
-                                html! {
-                                    <ol class="leaderboard-ol">
-                                        {
-                                            for leaderboard.iter().enumerate().map(|(idx, entry)| {
-                                                html! {
-                                                    <li key={idx} class="leaderboard-item">
-                                                        <span class="leader-name">{&entry.name}</span>
-                                                        <span class="leader-score">{entry.score}</span>
-                                                    </li>
-                                                }
-                                            })
-                                        }
-                                    </ol>
-                                }
-                            }
-                        }
-                    </div>
-                </div>
+                {if !*started || *game_over {
+                    html! { <LeaderboardPanel leaderboard={(*leaderboard).clone()} /> }
+                } else {
+                    html! {}
+                }}
             </div>
         </div>
-    }
-}
-
-// Simple Helper EventListener wrapper for Yew
-struct EventListener {
-    target: web_sys::EventTarget,
-    event_type: &'static str,
-    closure: Option<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>>,
-}
-
-impl EventListener {
-    fn new<F>(target: &web_sys::EventTarget, event_type: &'static str, mut callback: F) -> Self
-    where
-        F: FnMut(web_sys::Event) + 'static,
-    {
-        let closure = Closure::wrap(Box::new(move |e| callback(e)) as Box<dyn FnMut(web_sys::Event)>);
-        target
-            .add_event_listener_with_callback(event_type, closure.as_ref().unchecked_ref())
-            .unwrap();
-        Self {
-            target: target.clone(),
-            event_type,
-            closure: Some(closure),
-        }
-    }
-}
-
-impl Drop for EventListener {
-    fn drop(&mut self) {
-        if let Some(closure) = self.closure.take() {
-            let _ = self.target.remove_event_listener_with_callback(
-                self.event_type,
-                closure.as_ref().unchecked_ref(),
-            );
-        }
     }
 }
