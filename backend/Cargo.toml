@@ -56,3 +56,5 @@ constant_time_eq = "0.3"
 
 [dev-dependencies]
 tempfile = "3"
+# Needed for `tower::ServiceExt::oneshot` in `tests/integration.rs`.
+tower = { version = "0.5", features = ["util"] }

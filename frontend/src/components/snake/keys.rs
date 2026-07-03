@@ -89,3 +89,57 @@ pub fn install_keyboard_listener(
         },
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::direction_for_key;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn arrow_keys_map_to_directions() {
+        assert_eq!(direction_for_key("ArrowUp"), Some((0, -1)));
+        assert_eq!(direction_for_key("ArrowDown"), Some((0, 1)));
+        assert_eq!(direction_for_key("ArrowLeft"), Some((-1, 0)));
+        assert_eq!(direction_for_key("ArrowRight"), Some((1, 0)));
+    }
+
+    #[wasm_bindgen_test]
+    fn lowercase_wasd_map_to_directions() {
+        assert_eq!(direction_for_key("w"), Some((0, -1)));
+        assert_eq!(direction_for_key("a"), Some((-1, 0)));
+        assert_eq!(direction_for_key("s"), Some((0, 1)));
+        assert_eq!(direction_for_key("d"), Some((1, 0)));
+    }
+
+    #[wasm_bindgen_test]
+    fn uppercase_wasd_map_to_directions() {
+        assert_eq!(direction_for_key("W"), Some((0, -1)));
+        assert_eq!(direction_for_key("A"), Some((-1, 0)));
+        assert_eq!(direction_for_key("S"), Some((0, 1)));
+        assert_eq!(direction_for_key("D"), Some((1, 0)));
+    }
+
+    #[wasm_bindgen_test]
+    fn pause_keys_return_none() {
+        // Pause is handled separately by the keyboard listener before the
+        // direction lookup, so the pure mapper must NOT classify these as
+        // direction inputs.
+        assert_eq!(direction_for_key("Escape"), None);
+        assert_eq!(direction_for_key("p"), None);
+        assert_eq!(direction_for_key("P"), None);
+    }
+
+    #[wasm_bindgen_test]
+    fn unrelated_keys_return_none() {
+        assert_eq!(direction_for_key(" "), None);
+        assert_eq!(direction_for_key("Enter"), None);
+        assert_eq!(direction_for_key("Tab"), None);
+        assert_eq!(direction_for_key(""), None);
+        // Letters outside the WASD set (including accented/multibyte keys)
+        // should fall through to `None`.
+        assert_eq!(direction_for_key("x"), None);
+        assert_eq!(direction_for_key("X"), None);
+        assert_eq!(direction_for_key("q"), None);
+        assert_eq!(direction_for_key("z"), None);
+    }
+}

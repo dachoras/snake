@@ -42,4 +42,7 @@ web-sys = { version = "=0.3.98", features = [
     "Element",
     "NamedNodeMap",
     "Attr"
-] }
+]}
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

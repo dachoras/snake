@@ -29,3 +29,6 @@ pub mod state;
 pub mod tick;
 
 pub use state::use_snake_state;
+
+#[cfg(test)]
+mod apply_tick_tests;

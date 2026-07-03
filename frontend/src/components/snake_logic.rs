@@ -8,18 +8,141 @@ pub use crate::components::snake::Pos;
 
 use yew::UseStateHandle;
 
-/// Advances the snake one step in `next_dir`.
+/// Snapshot of game state consumed by [`apply_tick`].
 ///
-/// Behaviour:
-/// - Moves the head by `next_dir`; updates `direction`.
-/// - Sets `game_over` if the head leaves the grid or collides with the
-///   body. The early-return form here avoids accidental fall-through into
-///   the score update below.
-/// - If the head lands on `food`, grows the snake by one, awards points
-///   (30 for gold, 10 otherwise), updates `high_score` (and persists it),
-///   rolls a new gold/normal food, and respawns the food at a free cell
-///   via `generate_food`.
-/// - Otherwise just slides the snake forward by dropping the tail cell.
+/// Mirrors the `UseStateHandle` set used by [`handle_tick`] but as plain
+/// owned values, so the function can be exercised from tests without a
+/// renderer.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PureTickInputs {
+    pub snake: Vec<Pos>,
+    pub direction: Pos,
+    pub next_direction: Pos,
+    pub food: Pos,
+    pub score: u32,
+    pub high_score: u32,
+    pub game_over: bool,
+    pub is_gold: bool,
+    pub grid_size: i32,
+}
+
+/// Result of one [`apply_tick`] call.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PureTickOutputs {
+    pub snake: Vec<Pos>,
+    pub direction: Pos,
+    pub food: Pos,
+    pub score: u32,
+    pub high_score: u32,
+    pub game_over: bool,
+    pub is_gold: bool,
+}
+
+/// Threshold the gold-food roll has to clear to keep the next food as gold.
+pub const GOLD_ROLL_THRESHOLD: f64 = 0.15;
+
+/// Points awarded for eating a regular food cell.
+pub const REGULAR_FOOD_POINTS: u32 = 10;
+
+/// Points awarded for eating a gold food cell.
+pub const GOLD_FOOD_POINTS: u32 = 30;
+
+/// Advances the snake one step in `next_direction` and returns the new
+/// state.
+///
+/// Mirrors the runtime semantics in [`handle_tick`]:
+/// - `direction` is always advanced to `next_direction`.
+/// - Wall and self collisions set `game_over` and leave the body, food,
+///   and score untouched (matching the runtime early-return).
+/// - Eating food grows the snake by one cell, awards points, regenerates
+///   `food` at the `new_food` argument, and rolls the next gold flag via
+///   `gold_roll < [`GOLD_ROLL_THRESHOLD`].
+/// - Otherwise the snake slides forward by dropping its tail.
+///
+/// `gold_roll` is unused on non-food ticks but always required so the
+/// runtime path can call `js_sys::Math::random` exactly once per food
+/// consumption.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_tick(input: PureTickInputs, gold_roll: f64, new_food: Pos) -> PureTickOutputs {
+    let direction = input.next_direction;
+    let current_snake = input.snake;
+    let head = current_snake[0];
+    let new_head = (head.0 + direction.0, head.1 + direction.1);
+
+    if new_head.0 < 0
+        || new_head.0 >= input.grid_size
+        || new_head.1 < 0
+        || new_head.1 >= input.grid_size
+    {
+        return PureTickOutputs {
+            snake: current_snake,
+            direction,
+            food: input.food,
+            score: input.score,
+            high_score: input.high_score,
+            game_over: true,
+            is_gold: input.is_gold,
+        };
+    }
+    if current_snake.contains(&new_head) {
+        return PureTickOutputs {
+            snake: current_snake,
+            direction,
+            food: input.food,
+            score: input.score,
+            high_score: input.high_score,
+            game_over: true,
+            is_gold: input.is_gold,
+        };
+    }
+
+    let mut next_snake = vec![new_head];
+    next_snake.extend_from_slice(&current_snake);
+
+    let (food, score, high_score, is_gold) = if new_head == input.food {
+        let points = if input.is_gold {
+            GOLD_FOOD_POINTS
+        } else {
+            REGULAR_FOOD_POINTS
+        };
+        let new_score = input.score + points;
+        let new_high = if new_score > input.high_score {
+            new_score
+        } else {
+            input.high_score
+        };
+        let next_is_gold = gold_roll < GOLD_ROLL_THRESHOLD;
+        (new_food, new_score, new_high, next_is_gold)
+    } else {
+        next_snake.pop();
+        (input.food, input.score, input.high_score, input.is_gold)
+    };
+
+    PureTickOutputs {
+        snake: next_snake,
+        direction,
+        food,
+        score,
+        high_score,
+        game_over: input.game_over,
+        is_gold,
+    }
+}
+
+/// Persists a new high score to `localStorage`, if a window is available.
+/// Pulled out of [`handle_tick`] so the test path stays free of web APIs.
+fn persist_high_score(high_score: u32) {
+    if let Some(win) = web_sys::window()
+        && let Ok(Some(storage)) = win.local_storage()
+    {
+        let _ = storage.set_item("snake_high_score", &high_score.to_string());
+    }
+}
+
+/// Runtime wrapper that delegates to [`apply_tick`] and writes the result
+/// back to Yew's [`UseStateHandle`]s.
+///
+/// Kept as a thin adapter so the bulk of the logic stays testable.
 #[allow(clippy::too_many_arguments)]
 pub fn handle_tick(
     snake: &UseStateHandle<Vec<Pos>>,
@@ -33,42 +156,37 @@ pub fn handle_tick(
     grid_size: i32,
     generate_food: &impl Fn() -> Pos,
 ) {
-    let current_dir = **next_dir;
-    dir.set(current_dir);
-    let current_snake = (**snake).clone();
-    let head = current_snake[0];
-    let new_head = (head.0 + current_dir.0, head.1 + current_dir.1);
+    let gold_roll = js_sys::Math::random();
+    let next_food = generate_food();
+    let result = apply_tick(
+        PureTickInputs {
+            snake: (**snake).clone(),
+            direction: **dir,
+            next_direction: **next_dir,
+            food: **food,
+            score: **score,
+            high_score: **high_score,
+            game_over: **game_over,
+            is_gold: **is_gold,
+            grid_size,
+        },
+        gold_roll,
+        next_food,
+    );
 
-    if new_head.0 < 0 || new_head.0 >= grid_size || new_head.1 < 0 || new_head.1 >= grid_size {
+    dir.set(result.direction);
+    if result.game_over {
         game_over.set(true);
         return;
     }
-    if current_snake.contains(&new_head) {
-        game_over.set(true);
-        return;
+    snake.set(result.snake);
+    food.set(result.food);
+    score.set(result.score);
+    if result.high_score != **high_score {
+        high_score.set(result.high_score);
+        persist_high_score(result.high_score);
     }
-
-    let mut next_snake = vec![new_head];
-    next_snake.extend_from_slice(&current_snake);
-
-    if new_head == **food {
-        let points = if **is_gold { 30 } else { 10 };
-        let new_score = **score + points;
-        score.set(new_score);
-        if new_score > **high_score {
-            high_score.set(new_score);
-            if let Some(win) = web_sys::window()
-                && let Ok(Some(storage)) = win.local_storage()
-            {
-                let _ = storage.set_item("snake_high_score", &new_score.to_string());
-            }
-        }
-        // Set gold status for next food (15% chance)
-        let next_is_gold = js_sys::Math::random() < 0.15;
-        is_gold.set(next_is_gold);
-        food.set(generate_food());
-    } else {
-        next_snake.pop();
+    if result.is_gold != **is_gold {
+        is_gold.set(result.is_gold);
     }
-    snake.set(next_snake);
 }
