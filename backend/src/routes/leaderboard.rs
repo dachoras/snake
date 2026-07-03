@@ -2,12 +2,17 @@
 //!
 //! - `GET /api/leaderboard` — read the top-10 scores
 //! - `POST /api/leaderboard` — submit a new score (sanitised + sorted)
+//!
+//! Submissions serialise through `state.leaderboard_lock` and use atomic
+//! temp-file + rename so concurrent writers can't lose data via a
+//! read-modify-write race or leave a half-written file on disk.
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
 use crate::error::AppError;
@@ -30,7 +35,7 @@ pub struct LeaderboardEntry {
 
 /// Read the leaderboard file from disk, returning an empty list when the
 /// file is missing or unparseable.
-async fn read_leaderboard(path: &std::path::Path) -> Vec<LeaderboardEntry> {
+async fn read_leaderboard(path: &Path) -> Vec<LeaderboardEntry> {
     match fs::read_to_string(path).await {
         Ok(content) => match serde_json::from_str(&content) {
             Ok(list) => list,
@@ -73,6 +78,41 @@ pub fn sanitize_player_name(raw: &str) -> String {
     }
 }
 
+/// Atomically replace `path` with `content`.
+///
+/// Writes to a sibling temp file then `rename`s it on top of the target.
+/// `rename` is atomic on POSIX (and on Windows when the target exists),
+/// so a crash or concurrent reader can never observe a half-written
+/// leaderboard. The temp file lives next to `path` so the rename stays on
+/// the same filesystem.
+async fn atomic_write(path: &Path, content: &[u8]) -> Result<(), AppError> {
+    let parent = path.parent().ok_or_else(|| {
+        tracing::error!(
+            target: "leaderboard",
+            path = %path.display(),
+            "leaderboard path has no parent; cannot atomic-write"
+        );
+        AppError::internal("leaderboard path has no parent")
+    })?;
+    let file_name = path.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
+        tracing::error!(
+            target: "leaderboard",
+            path = %path.display(),
+            "leaderboard file name is not UTF-8; refusing to write"
+        );
+        AppError::internal("leaderboard file name is not UTF-8")
+    })?;
+    let tmp: PathBuf = parent.join(format!(".{file_name}.tmp"));
+
+    fs::create_dir_all(parent).await?;
+    fs::write(&tmp, content).await?;
+    if let Err(e) = fs::rename(&tmp, path).await {
+        let _ = fs::remove_file(&tmp).await;
+        return Err(AppError::Io(e));
+    }
+    Ok(())
+}
+
 /// `GET /api/leaderboard` — return the current top-10 leaderboard.
 pub async fn get_leaderboard(State(state): State<AppState>) -> Response {
     let path = state.leaderboard_file.clone();
@@ -82,34 +122,46 @@ pub async fn get_leaderboard(State(state): State<AppState>) -> Response {
 
 /// `POST /api/leaderboard` — accept a new entry, sanitise it, sort, truncate,
 /// and persist.
+///
+/// The submission flow holds `state.leaderboard_lock` for the entire
+/// read-modify-write critical section so two parallel POSTs cannot lose
+/// data. `get_leaderboard` does NOT take the lock — a concurrent reader
+/// may observe either the pre- or post-write top-10, never a half-written
+/// file (atomic-rename semantics).
 pub async fn submit_score(
     State(state): State<AppState>,
     Json(mut entry): Json<LeaderboardEntry>,
 ) -> Result<Response, AppError> {
     let path = state.leaderboard_file.clone();
-
-    let mut list = read_leaderboard(&path).await;
+    let path_for_log = path.clone();
 
     entry.name = sanitize_player_name(&entry.name);
     // `chrono::DateTime<Utc>::to_rfc3339` is infallible, so we don't need a
     // dedicated error variant for timestamp formatting any more — keep the
     // log site in case future format strings become fallible.
     entry.date = Utc::now().to_rfc3339();
-    tracing::trace!(target: "leaderboard", date = %entry.date, "timestamped new entry");
+    tracing::trace!(
+        target: "leaderboard",
+        date = %entry.date,
+        "timestamped new entry"
+    );
 
+    // Serialise concurrent submissions so the read-modify-write can't
+    // race. The lock guard drops at the end of the function, releasing
+    // the lock only after `atomic_write` has renamed the temp file.
+    let _guard = state.leaderboard_lock.lock().await;
+
+    let mut list = read_leaderboard(&path).await;
     list.push(entry);
     list.sort_by_key(|e| std::cmp::Reverse(e.score));
     list.truncate(MAX_LEADERBOARD_ENTRIES);
 
     let content = serde_json::to_string_pretty(&list)?;
-    // Ensure the directory exists (it should, but cheap insurance if the
-    // operator mounted a fresh volume between startup and first write).
-    fs::create_dir_all(&state.data_dir).await?;
-    fs::write(&path, content).await?;
+    atomic_write(&path, content.as_bytes()).await?;
 
     tracing::info!(
         target: "leaderboard",
-        path = %path.display(),
+        path = %path_for_log.display(),
         entries = list.len(),
         "leaderboard updated"
     );
@@ -161,5 +213,27 @@ mod tests {
     fn sanitize_exactly_at_limit_is_unchanged() {
         let s: String = "a".repeat(MAX_PLAYER_NAME_CHARS);
         assert_eq!(sanitize_player_name(&s), s);
+    }
+
+    #[tokio::test]
+    async fn atomic_write_round_trip() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("round.json");
+        atomic_write(&path, b"[{\"name\":\"a\"}]")
+            .await
+            .expect("write");
+        let body = tokio::fs::read_to_string(&path).await.expect("read");
+        assert_eq!(body, "[{\"name\":\"a\"}]");
+        // Temp file should have been renamed away.
+        assert!(!tmp.path().join(".round.json.tmp").exists());
+    }
+
+    #[tokio::test]
+    async fn atomic_write_overwrites_existing() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("over.json");
+        tokio::fs::write(&path, b"OLD").await.expect("old");
+        atomic_write(&path, b"NEW").await.expect("new");
+        assert_eq!(tokio::fs::read_to_string(&path).await.expect("read"), "NEW");
     }
 }

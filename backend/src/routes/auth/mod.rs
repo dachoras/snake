@@ -63,7 +63,7 @@ mod tests {
     use std::collections::HashSet;
     use std::sync::Arc;
     use tempfile::TempDir;
-    use tokio::sync::RwLock;
+    use tokio::sync::{Mutex, RwLock};
 
     fn build_state(pin: Option<&str>) -> AppState {
         let mut server = shared_backend::server::ServerConfig::from_env(crate::config::APP_BRAND);
@@ -82,6 +82,7 @@ mod tests {
             web_root: tmp.path().join("frontend"),
             active_sessions: RwLock::new(HashSet::new()),
             rate_limiter: RwLock::new(RateLimiter::new()),
+            leaderboard_lock: Arc::new(Mutex::new(())),
         })
     }
 

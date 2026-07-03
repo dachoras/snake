@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.32] - 2026-07-02
+
+### Fixed
+- **PWA install path mismatch**: `frontend/index.html` referenced `/manifest.json` but the backend serves it at `/Assets/manifest.json`. The PWA install prompt would 404 against the `<link rel="manifest">`. Updated `index.html` to point to the correct path.
+- **Leaderboard race condition**: two concurrent `POST /api/leaderboard` requests could each read the file, append their entry, and write — losing one entry. Now serialised through `state.leaderboard_lock` and written atomically via temp-file + rename (`leaderboard.rs::atomic_write`).
+- **No request body size limit**: a multi-MB POST to `/api/verify-pin` (or any other `/api/*` endpoint) would fully buffer before the Json extractor rejects, exhausting memory. Now capped at 64 KiB via `tower_http::limit::RequestBodyLimitLayer`; over-sized bodies get `413 Payload Too Large` before any handler runs.
+
+### Added
+- `leaderboard_lock: Arc<tokio::sync::Mutex<()>>` field on `AppStateInner`.
+- `routes/leaderboard.rs::atomic_write()` helper, with two unit tests covering round-trip and over-write.
+- Two new integration tests: `request_body_over_limit_returns_413` and `leaderboard_concurrent_submissions_do_not_lose_data` (the latter fires 10 parallel POSTs and asserts every name lands).
+
 ## [1.0.31] - 2026-07-02
 
 ### Added

@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::fs;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 pub use crate::config::AppConfig;
 use crate::services::rate_limit::RateLimiter;
@@ -30,6 +30,11 @@ pub struct AppStateInner {
     pub active_sessions: RwLock<HashSet<String>>,
     /// Per-IP request-budget limiter.
     pub rate_limiter: RwLock<RateLimiter>,
+    /// Serialises concurrent reads/writes of the leaderboard file so two
+    /// simultaneous submissions cannot lose data via a read-modify-write
+    /// race. The lock is held only across the (small) in-memory operation
+    /// and the atomic write to disk; it does NOT span the disk read.
+    pub leaderboard_lock: Arc<Mutex<()>>,
 }
 
 /// Cheap-to-clone handle for [`AppStateInner`].
@@ -108,6 +113,7 @@ mod tests {
             web_root: dir.join("frontend"),
             active_sessions: RwLock::new(HashSet::new()),
             rate_limiter: RwLock::new(RateLimiter::new()),
+            leaderboard_lock: Arc::new(Mutex::new(())),
         })
     }
 

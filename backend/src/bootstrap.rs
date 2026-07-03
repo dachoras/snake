@@ -14,7 +14,7 @@ use crate::tracing_init::{LOG_DIR_ENV, default_log_dir, init_tracing, normalise_
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 /// Side-effects bundle returned to `main.rs` after startup.
 pub struct Runtime {
@@ -72,6 +72,7 @@ pub fn build_state(config: AppConfig) -> AppState {
         web_root: web_root.clone(),
         active_sessions: RwLock::new(std::collections::HashSet::new()),
         rate_limiter: RwLock::new(crate::services::rate_limit::RateLimiter::new()),
+        leaderboard_lock: Arc::new(Mutex::new(())),
     });
 
     let cleanup_state = state.clone();

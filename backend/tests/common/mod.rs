@@ -17,7 +17,7 @@ use axum::extract::ConnectInfo;
 use axum::http::{HeaderMap, Request, StatusCode};
 use serde_json::Value;
 use tempfile::TempDir;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tower::ServiceExt;
 
 use backend::config::AppConfig;
@@ -43,6 +43,7 @@ pub fn make_state(pin: Option<&str>, data_dir: &Path, web_root: &Path) -> AppSta
         web_root: web_root.to_path_buf(),
         active_sessions: RwLock::new(HashSet::new()),
         rate_limiter: RwLock::new(RateLimiter::new()),
+        leaderboard_lock: Arc::new(Mutex::new(())),
     })
 }
 

@@ -144,3 +144,67 @@ async fn leaderboard_get_returns_empty_array_after_file_delete() {
     let raw = serde_json::to_string(&body).expect("serialise");
     assert_eq!(raw, "[]");
 }
+
+#[tokio::test]
+async fn request_body_over_limit_returns_413() {
+    let (_tmp, _state, router) = build_test_app(None).await;
+    // 64 KiB is the configured body limit; send 80 KiB to overflow it.
+    let oversize = "x".repeat(80 * 1024);
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/verify-pin")
+        .header("content-type", "application/json")
+        .body(Body::from(format!(r#"{{"pin":"{oversize}"}}"#)))
+        .expect("req");
+    let (status, _body, _) = send(&router, with_connect_info(req)).await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn leaderboard_concurrent_submissions_do_not_lose_data() {
+    use std::collections::HashSet;
+    let (_tmp, state, router) = build_test_app(None).await;
+
+    // Fire 10 POSTs concurrently; the leaderboard serialises them via
+    // the per-state mutex, so every entry must land in the final read.
+    let mut handles = Vec::new();
+    for i in 0..10 {
+        let router = router.clone();
+        handles.push(tokio::spawn(async move {
+            let entry = json!({
+                "name": format!("player_{i:02}"),
+                "score": i as u32,
+                "date": "2026-01-01T00:00:00Z",
+            });
+            let req = with_connect_info(json_post("/api/leaderboard", entry));
+            send(&router, req).await.0
+        }));
+    }
+    for h in handles {
+        assert_eq!(h.await.expect("join"), StatusCode::OK);
+    }
+
+    // Final GET should reflect all 10 unique entries.
+    let (status, body, _) = send(&router, with_connect_info(get("/api/leaderboard"))).await;
+    assert_eq!(status, StatusCode::OK);
+    let names: HashSet<String> = body
+        .as_array()
+        .expect("array")
+        .iter()
+        .map(|e| e["name"].as_str().unwrap_or("").to_string())
+        .collect();
+    assert_eq!(
+        names.len(),
+        10,
+        "expected 10 unique entries, got: {names:?}"
+    );
+
+    // Temp file should not linger after the last atomic_write.
+    assert!(
+        !state
+            .leaderboard_file
+            .with_file_name(".leaderboard.json.tmp")
+            .exists(),
+        "atomic-write temp file still present after all writes completed"
+    );
+}

@@ -6,6 +6,7 @@ use axum::routing::{get, post};
 use shared_backend::middleware::{HstsState, cors_layer, hsts_layer, security_headers_layer};
 use std::path::Path;
 use std::sync::Arc;
+use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
@@ -15,6 +16,14 @@ use crate::routes::{
     serve_service_worker, submit_score, verify_pin,
 };
 use crate::state::AppState;
+
+/// Hard cap on request bodies for the `/api/*` namespace. The largest
+/// legitimate JSON payload is the leaderboard entry
+/// (`{name, score, date}`); 64 KiB is generous and still closes the
+/// obvious DoS where a client `POST`s multi-MB JSON to /api/* to exhaust
+/// memory. Falling outside this limit automatically returns
+/// `413 Payload Too Large` via [`RequestBodyLimitLayer`].
+const REQUEST_BODY_LIMIT_BYTES: usize = 64 * 1024;
 
 /// Build the snake router. `web_root` is the resolved on-disk frontend
 /// directory (the `ServeDir` fallback serves anything not handled by an
@@ -33,8 +42,13 @@ pub fn build_router(state: AppState, web_root: &Path) -> Router {
         .route("/config", get(get_config))
         .route("/logout", post(logout));
 
+    // Merge the gated + public sub-routers, then attach body-limit, rate-limit.
+    // Body-limit applied to the merged router so EVERY `/api/*` POST is
+    // capped — including PIN verification, which would otherwise be a
+    // memory-exhaustion vector.
     let merged_api = api_routes
         .merge(public_api_routes)
+        .layer(RequestBodyLimitLayer::new(REQUEST_BODY_LIMIT_BYTES))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             rate_limit_middleware,
