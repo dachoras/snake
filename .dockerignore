@@ -1,36 +1,53 @@
-# Version control
-.git
+# --- Version control ---
+.git/
+.github/
 .gitignore
 .gitattributes
+.gitmodules
 
-# Environment files
-.env
-.env.*
-!.env.example
-
-# Rust build outputs
+# --- Rust build outputs (Nix rebuilds) ---
 target/
 **/target/
+dist/
 frontend/dist/
 frontend/target/
-dist/
 
-# Local data & uploads
+# --- Local runtime data (mounted at runtime) ---
+data/
 local_uploads/
 uploads/
-data/
 
-# Development configurations
+# --- Nix build outputs ---
+result
+result-*
+
+# --- Environment files ---
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# --- Docs (Nix copies only what's needed) ---
+README.md
+LICENSE
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+CHANGELOG.md
+
+# --- Editor / IDE ---
 .vscode/
 .idea/
 *.swp
 *.swo
-.cursorrules
 
-# System files
+# --- OS junk ---
 .DS_Store
 Thumbs.db
 
-# Docker files
+# --- Project extras ---
+.cursorrules
+
+# --- Docker artifacts ---
 docker-compose*.yml
 Dockerfile*
