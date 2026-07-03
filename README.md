@@ -3,7 +3,7 @@
 [![CI](https://github.com/UberMetroid/snake/actions/workflows/ci.yml/badge.svg)](https://github.com/UberMetroid/snake/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/UberMetroid/snake/main/assets/logo.png?v=1.0.34" alt="Snake Logo" width="128" height="128">
+  <img src="https://raw.githubusercontent.com/UberMetroid/snake/main/assets/logo.png?v=1.0.35" alt="Snake Logo" width="128" height="128">
 </p>
 
 ## Overview
@@ -33,38 +33,53 @@ The Docker image is built with **Nix** (no Alpine, fully reproducible) and publi
 
 ## Container Installation
 
-1. Create a `docker-compose.yml` file:
+The shipped [`docker-compose.yml`](./docker-compose.yml) is the full recipe; copy it (or rename it to `compose.yaml`) and adjust the host-side `${VAR}` overrides as needed. Three things are **mandatory**:
+
+| Setting | Why |
+| :--- | :--- |
+| `image: ubermetroid/snake:latest` | Container can't run without an image. Pull from Docker Hub or replace with a `nix build .#dockerImage && docker load < result` output. |
+| `volumes: ["./data:/app/data", ...]` | Persists the leaderboard (`${...}/leaderboard.json`) and log files. **Without this mount, scores vanish on every container restart.** |
+| `ports: ["4501:4501"]` | Exposes the SPA + API to the host. Change the host side to e.g. `"8080:4501"` to publish on a different port. |
+
+### Minimum viable recipe
+
+If you want the absolute minimum to come up, the line-noise YAML above already is the smallest sensible version. Equivalent bare-bones form, for reference:
 
 ```yaml
-version: '3'
 services:
   snake:
     image: ubermetroid/snake:latest
-    container_name: snake
-    restart: unless-stopped
-    ports:
-      - 4501:4501
     volumes:
       - ./data:/app/data
+    ports:
+      - "4501:4501"
     environment:
-      - PORT=4501
-      - SITE_TITLE=Snake
-      - BASE_URL=http://localhost:4501
-      - ALLOWED_ORIGINS=*
-      - SNAKE_PIN=1234
-      - TZ=UTC
-      - ENABLE_TRANSLATION=false
-      - ENABLE_THEMES=true
-      - ENABLE_PRINT=false
+      BASE_URL: http://localhost:4501   # change for non-localhost deploys
+      SNAKE_PIN: ""                     # leave empty for no auth, or set a 4-64 char PIN
 ```
 
-2. Run the container:
+### What you usually need to change for production
+
+| Setting | When |
+| :--- | :--- |
+| `BASE_URL` | Must match the *public* URL (with scheme + host, no trailing slash). Wrong value breaks `Secure` cookie flagging, the PWA install prompt, and the `Origin`-header CSRF defense. |
+| `SNAKE_PIN` | Any deployment that isn't `localhost` demo. 4-64 chars. |
+| Reverse-proxy forwarding | TLS should be terminated upstream and `x-forwarded-proto: https` passed through; the backend only marks cookies Secure when both (a) the header says HTTPS or (b) `BASE_URL` starts with `https`. See "Production Deployment" below. |
+
+### Run
 
 ```bash
 docker compose up -d
 ```
 
-3. Open your browser and navigate to `http://localhost:4501`.
+Open `http://localhost:4501` (or whatever host port you chose) in a browser.
+
+## Local Development (Trunk)
+
+For frontend iteration outside Nix:
+
+```bash
+cd frontend
 
 ### Local Development (Trunk)
 

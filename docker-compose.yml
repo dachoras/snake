@@ -1,20 +1,92 @@
+# Snake docker-compose.
+#
+# This file ships a complete, runnable recipe for the `ubermetroid/snake`
+# image (Nix-built, no Dockerfile). Operator overrides come from the
+# host shell env or a `.env` file in the same directory.
+#
+# --- MANDATORY for a working deployment --------------------------------------
+#   1. `image:`        — pulls the prebuilt Nix-based binary from Docker Hub
+#   2. `volumes:`      — bind-mounts `${SNAKE_DATA_PATH}` to `/app/data` so the
+#                       leaderboard and log files survive container restarts.
+#                       Without this volume, scores vanish every time the
+#                       container recreates.
+#   3. `ports:`        — exposes the listening port (default `4501`) to the host
+#                       so the SPA is reachable from a browser.
+#
+# --- COMMONLY REQUIRED for production -----------------------------------------
+#   * `BASE_URL`       — must match the *public* URL (e.g.
+#                       `https://snake.example.com`); wrong value breaks
+#                       HTTPS cookie flagging, PWA install, and the
+#                       Origin-header CSRF defense.
+#   * `SNAKE_PIN`      — empty disables auth entirely. Set a 4-64 char PIN
+#                       for any non-toy deployment.
+#   * `MAX_ATTEMPTS`   — brute-force lockout threshold per IP, default 5.
+#   * `ALLOWED_ORIGINS`— CORS allow-list. The default `*` is safe because
+#                       auth cookies are `SameSite=Strict`, but explicit
+#                       values are nicer for ops.
+#   * `TZ`             — log timestamps; defaults to UTC.
+#   * Reverse proxy    — terminates TLS and forwards `x-forwarded-proto`
+#                       to the container. See README "Production Deployment".
+#
+# --- OPTIONAL UI FEATURES ------------------------------------------------------
+#   * `ENABLE_TRANSLATION` — show the language picker in the header.
+#   * `ENABLE_THEMES`      — show the Super Metroid theme picker.
+#   * `ENABLE_PRINT`       — show the print button (browser print dialog).
 services:
   snake:
+    # (1) MANDATORY: image to run. Pulled from Docker Hub. To use a
+    # locally-built image instead, replace with `image: snake-nix:latest`
+    # after `nix build .#dockerImage && docker load < result`.
     image: ubermetroid/snake:latest
     container_name: snake
     restart: unless-stopped
+
+    # (2) MANDATORY: persistent volume for the leaderboard + logs. The Nix
+    # image bakes `/app/data` into the container with `nobody` as the owner,
+    # so the bind mount lands on a writable directory without an extra
+    # `chown`.
+    volumes:
+      # `${SNAKE_DATA_PATH:-./data}` defaults to a host-local `./data/`;
+      # set `SNAKE_DATA_PATH=/var/lib/snake` in production.
+      - ${SNAKE_DATA_PATH:-./data}:/app/data
+
+    # (3) MANDATORY: port mapping. Default `4501:4501` is the documented
+    # port for both the image (per the `Env = ["PORT=4501"]` block in
+    # `flake.nix`'s `dockerImage` derivation) and `default-port: 4501` in
+    # the README. To expose on a different host port (e.g. behind a
+    # reverse proxy on `:443`), set `PORT=8080:4501` here.
     ports:
       - ${PORT:-4501}:4501
-    volumes:
-      - ${SNAKE_DATA_PATH:-./data}:/app/data
+
     environment:
+      # ---- Required for any non-localhost deployment ----
+      # Container-internal port. The Nix image defaults to PORT=4501
+      # already; we set it explicitly so the `ports:` mapping above and
+      # the in-container listen address stay in lockstep.
       PORT: 4501
-      SITE_TITLE: ${SNAKE_SITE_TITLE:-Snake}
-      SNAKE_PIN: ${SNAKE_PIN:-}
+
+      # Must match the PUBLIC URL the browser uses to reach Snake. Wrong
+      # value means `Secure` cookie flagging, PWA install metadata, and
+      # Origin-header CSRF validation all break.
       BASE_URL: ${SNAKE_BASE_URL:-http://localhost:4501}
+
+      # ---- Auth & hardening ----
+      # 4-64 characters. Frontend accepts 4-10 ASCII digits; the backend
+      # accepts any 4-64 chars. Empty disables auth entirely.
+      SNAKE_PIN: ${SNAKE_PIN:-}
+
+      # CORS allow-list. `*` is safe in production too because auth
+      # cookies are `SameSite=Strict`; explicit value is preferred.
       ALLOWED_ORIGINS: ${SNAKE_ALLOWED_ORIGINS:-*}
-      TZ: ${TZ:-UTC}
+
+      # Per-IP PIN brute-force lockout threshold.
+      MAX_ATTEMPTS: ${MAX_ATTEMPTS:-5}
+
+      # ---- UI feature flags (header chrome) ----
+      SITE_TITLE: ${SNAKE_SITE_TITLE:-Snake}
       ENABLE_TRANSLATION: ${ENABLE_TRANSLATION:-false}
       ENABLE_THEMES: ${ENABLE_THEMES:-true}
       ENABLE_PRINT: ${ENABLE_PRINT:-true}
-      MAX_ATTEMPTS: ${MAX_ATTEMPTS:-5}
+
+      # ---- Misc ----
+      TZ: ${TZ:-UTC}
