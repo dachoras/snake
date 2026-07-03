@@ -17,7 +17,7 @@ use super::actions::{
     make_set_next_dir,
 };
 use super::food::{install_gold_timeout, load_high_score};
-use super::keys::install_keyboard_listener;
+use super::keys::use_keyboard_listener;
 use super::tick::{TickInputs, use_tick_loop};
 
 /// Bundle returned by [`use_snake_state`].
@@ -122,7 +122,7 @@ pub fn use_snake_state(on_status: Callback<Option<(String, String)>>) -> SnakeSt
     let on_resume = make_on_resume(&paused);
     let set_next_dir = make_set_next_dir(&next_direction, &direction);
     let on_dpad_press = make_on_dpad_press(set_next_dir);
-    install_keyboard_listener(&started, &game_over, &paused, &on_dpad_press);
+    use_keyboard_listener(&started, &game_over, &paused, &on_dpad_press);
 
     SnakeState {
         snake,

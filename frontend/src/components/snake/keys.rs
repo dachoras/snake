@@ -33,7 +33,8 @@ pub fn direction_for_key(key: &str) -> Option<(i32, i32)> {
 ///    game is in progress).
 /// 2. Ignores movement keys while the game is paused.
 /// 3. Forwards every recognised direction key to `on_dpad_press`.
-pub fn install_keyboard_listener(
+#[hook]
+pub fn use_keyboard_listener(
     started: &UseStateHandle<bool>,
     game_over: &UseStateHandle<bool>,
     paused: &UseStateHandle<bool>,
@@ -43,23 +44,22 @@ pub fn install_keyboard_listener(
     let is_game_over = **game_over;
     let is_paused = **paused;
     let paused = paused.clone();
-    let on_dpad_press = on_dpad_press.clone();
+
+    // Store the latest dpad press callback in a ref to avoid stale closure capture
+    let callback_ref = use_mut_ref(|| on_dpad_press.clone());
+    *callback_ref.borrow_mut() = on_dpad_press.clone();
+
+    let callback_ref_for_listener = callback_ref.clone();
 
     use_effect_with(
         (is_started, is_game_over, is_paused),
-        move |(st, go, ps)| {
-            // Copy out the captured `bool`s so the inner `'static`
-            // `EventListener` closure can own them rather than borrowing
-            // from the outer `&(bool, bool, bool)` argument.
-            let st = *st;
-            let go = *go;
-            let ps = *ps;
+        move |&(st, go, ps)| {
             // The renderer only runs in a browser window, so `window()` is
             // safe to unwrap. Documented per the "no unwrap in non-test code"
             // rule that applies to this crate.
             let window = web_sys::window().expect("renderer runs in a browser window");
-            let on_dpad_press = on_dpad_press.clone();
             let paused = paused.clone();
+            let callback_ref = callback_ref_for_listener.clone();
             let listener = EventListener::new(&window, "keydown", move |e: web_sys::Event| {
                 // The event is registered as `"keydown"` so the target is
                 // always a `KeyboardEvent`; the cast cannot fail at runtime.
@@ -82,7 +82,7 @@ pub fn install_keyboard_listener(
                 }
 
                 if let Some(dir) = direction_for_key(&key) {
-                    on_dpad_press.emit(dir);
+                    callback_ref.borrow().emit(dir);
                 }
             });
             move || drop(listener)
