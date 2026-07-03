@@ -33,6 +33,7 @@ pub struct SnakeState {
     pub leaderboard: UseStateHandle<Vec<LeaderboardEntry>>,
     pub player_name: UseStateHandle<String>,
     pub submitting: UseStateHandle<bool>,
+    pub submitted: UseStateHandle<bool>,
     pub on_restart: Callback<MouseEvent>,
     pub on_submit_score: Callback<SubmitEvent>,
     pub on_name_input: Callback<InputEvent>,
@@ -56,6 +57,7 @@ pub fn use_snake_state(on_status: Callback<Option<(String, String)>>) -> SnakeSt
     let leaderboard = use_state(Vec::<LeaderboardEntry>::new);
     let player_name = use_state(String::new);
     let submitting = use_state(|| false);
+    let submitted = use_state(|| false);
     // `LocaleContext` is always provided by the root `App` view. Documented
     // per the "no unwrap in non-test code" rule that applies to this crate.
     let locale =
@@ -116,8 +118,16 @@ pub fn use_snake_state(on_status: Callback<Option<(String, String)>>) -> SnakeSt
         &paused,
         &started,
         &is_gold,
+        &submitted,
     );
-    let on_submit_score = make_on_submit_score(&player_name, &score, &submitting, &leaderboard);
+    let on_submit_score = make_on_submit_score(
+        &player_name,
+        &score,
+        &submitting,
+        &leaderboard,
+        &submitted,
+        &on_status,
+    );
     let on_name_input = make_on_name_input(&player_name);
     let on_resume = make_on_resume(&paused);
     let set_next_dir = make_set_next_dir(&next_direction, &direction);
@@ -136,6 +146,7 @@ pub fn use_snake_state(on_status: Callback<Option<(String, String)>>) -> SnakeSt
         leaderboard,
         player_name,
         submitting,
+        submitted,
         on_restart,
         on_submit_score,
         on_name_input,

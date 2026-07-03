@@ -28,6 +28,7 @@ pub fn make_on_restart(
     paused: &UseStateHandle<bool>,
     started: &UseStateHandle<bool>,
     is_gold: &UseStateHandle<bool>,
+    submitted: &UseStateHandle<bool>,
 ) -> Callback<MouseEvent> {
     let snake = snake.clone();
     let direction = direction.clone();
@@ -38,6 +39,7 @@ pub fn make_on_restart(
     let paused = paused.clone();
     let started = started.clone();
     let is_gold = is_gold.clone();
+    let submitted = submitted.clone();
     Callback::from(move |_| {
         snake.set(FRESH_SNAKE.to_vec());
         direction.set(INITIAL_DIR);
@@ -47,6 +49,7 @@ pub fn make_on_restart(
         paused.set(false);
         started.set(true);
         is_gold.set(false);
+        submitted.set(false);
         food.set(generate_food(&FRESH_SNAKE));
     })
 }
@@ -57,11 +60,15 @@ pub fn make_on_submit_score(
     score: &UseStateHandle<u32>,
     submitting: &UseStateHandle<bool>,
     leaderboard: &UseStateHandle<Vec<LeaderboardEntry>>,
+    submitted: &UseStateHandle<bool>,
+    on_status: &Callback<Option<(String, String)>>,
 ) -> Callback<SubmitEvent> {
     let name = player_name.clone();
     let score_val = **score;
     let submitting = submitting.clone();
     let leaderboard = leaderboard.clone();
+    let submitted = submitted.clone();
+    let on_status = on_status.clone();
     Callback::from(move |e: SubmitEvent| {
         e.prevent_default();
         let name_str = (*name).clone();
@@ -71,11 +78,21 @@ pub fn make_on_submit_score(
         submitting.set(true);
         let submitting = submitting.clone();
         let leaderboard = leaderboard.clone();
+        let submitted = submitted.clone();
+        let on_status = on_status.clone();
         spawn_local(async move {
-            if ApiService::submit_score(&name_str, score_val).await.is_ok()
-                && let Ok(list) = ApiService::get_leaderboard().await
-            {
-                leaderboard.set(list);
+            match ApiService::submit_score(&name_str, score_val).await {
+                Ok(_) => {
+                    if let Ok(list) = ApiService::get_leaderboard().await {
+                        leaderboard.set(list);
+                    }
+                    submitted.set(true);
+                    on_status.emit(Some(("Score submitted successfully!".to_string(), "success".to_string())));
+                }
+                Err(e) => {
+                    web_sys::console::error_1(&format!("Failed to submit score: {:?}", e).into());
+                    on_status.emit(Some((format!("Submission failed: {}", e), "error".to_string())));
+                }
             }
             submitting.set(false);
         });

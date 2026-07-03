@@ -21,6 +21,8 @@ pub struct SnakeOverlayProps {
     pub score: u32,
     /// `true` while a leaderboard submission is in flight.
     pub submitting: bool,
+    /// `true` after a successful leaderboard submission.
+    pub submitted: bool,
     /// Player name typed into the game-over form.
     pub player_name: String,
     /// Fired when the player presses "PLAY AGAIN" or "PRESS START".
@@ -52,20 +54,28 @@ pub fn snake_overlay(props: &SnakeOverlayProps) -> Html {
                 <h2>{locale.t("game_over")}</h2>
                 <p class="score-summary">{format!("{}: {}", locale.t("final_score"), props.score)}</p>
 
-                <form onsubmit={props.on_submit_score.clone()} class="submit-score-form">
-                    <input
-                        type="text"
-                        placeholder={locale.t("enter_name")}
-                        value={props.player_name.clone()}
-                        oninput={props.on_name_input.clone()}
-                        class="name-input"
-                        maxlength="15"
-                        required=true
-                    />
-                    <button type="submit" class="btn-submit" disabled={props.submitting}>
-                        {if props.submitting { locale.t("submitting") } else { locale.t("submit_score") }}
-                    </button>
-                </form>
+                {
+                    if props.submitted {
+                        html! { <p class="submit-success">{"Score submitted!"}</p> }
+                    } else {
+                        html! {
+                            <form onsubmit={props.on_submit_score.clone()} class="submit-score-form">
+                                <input
+                                    type="text"
+                                    placeholder={locale.t("enter_name")}
+                                    value={props.player_name.clone()}
+                                    oninput={props.on_name_input.clone()}
+                                    class="name-input"
+                                    maxlength="15"
+                                    required=true
+                                />
+                                <button type="submit" class="btn-submit" disabled={props.submitting}>
+                                    {if props.submitting { locale.t("submitting") } else { locale.t("submit_score") }}
+                                </button>
+                            </form>
+                        }
+                    }
+                }
 
                 <button onclick={props.on_restart.clone()} class="btn-restart">{locale.t("play_again")}</button>
             </div>

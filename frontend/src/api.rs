@@ -185,10 +185,19 @@ impl ApiService {
             score,
             date: String::new(),
         };
-        Request::post("/api/leaderboard")
+        let response = Request::post("/api/leaderboard")
             .json(&payload)?
             .send()
             .await?;
+        if !response.ok() {
+            let status = response.status();
+            if let Ok(err_res) = response.json::<serde_json::Value>().await
+                && let Some(err_str) = err_res.get("error").and_then(|v| v.as_str())
+            {
+                return Err(gloo_net::Error::GlooError(err_str.to_string()));
+            }
+            return Err(gloo_net::Error::GlooError(format!("HTTP error {status}")));
+        }
         Ok(())
     }
 }

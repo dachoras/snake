@@ -60,6 +60,7 @@ pub fn snake_game(props: &SnakeGameProps) -> Html {
                     paused={*state.paused}
                     score={*state.score}
                     submitting={*state.submitting}
+                    submitted={*state.submitted}
                     player_name={(*state.player_name).clone()}
                     on_restart={state.on_restart.clone()}
                     on_submit_score={state.on_submit_score.clone()}
