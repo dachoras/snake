@@ -46,7 +46,17 @@ pub fn assert_origin_allowed(
         return Err(Box::new(forbidden_response()));
     }
     let base = state.config.server.base_url.as_str();
-    if origin_matches(origin, base) {
+    let is_same_origin = if let Some(host) = req.headers().get(header::HOST).and_then(|h| h.to_str().ok()) {
+        let stripped_origin = origin
+            .strip_prefix("http://")
+            .or_else(|| origin.strip_prefix("https://"))
+            .unwrap_or(origin);
+        stripped_origin == host
+    } else {
+        false
+    };
+
+    if is_same_origin || origin_matches(origin, base) {
         Ok(())
     } else {
         tracing::warn!(target: "origin_check", origin = %origin, base_url = %base, "rejected: cross-origin");
@@ -104,146 +114,5 @@ pub async fn origin_check_middleware(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::AppConfig;
-    use crate::services::rate_limit::RateLimiter;
-    use crate::state::AppStateInner;
-    use axum::body::Body;
-    use axum::http::{Method, Request as HttpRequest};
-    use std::collections::HashSet;
-    use std::sync::Arc;
-    use tokio::sync::{Mutex, RwLock};
-
-    fn build_state(base_url: &str) -> AppState {
-        let mut server = shared_backend::server::ServerConfig::from_env(crate::config::APP_BRAND);
-        server.base_url = base_url.to_string();
-        let cfg = AppConfig {
-            server,
-            page_history_cookie_age_days: 1,
-            node_env: "test".to_string(),
-            version: "test".to_string(),
-        };
-        let tmp = tempfile::TempDir::new().expect("tempdir");
-        Arc::new(AppStateInner {
-            config: cfg,
-            data_dir: tmp.path().to_path_buf(),
-            leaderboard_file: tmp.path().join("leaderboard.json"),
-            web_root: tmp.path().join("frontend"),
-            active_sessions: RwLock::new(HashSet::new()),
-            rate_limiter: RwLock::new(RateLimiter::new()),
-            leaderboard_lock: Arc::new(Mutex::new(())),
-            metrics: Arc::new(crate::metrics::Metrics::new("test", 0, 0)),
-        })
-    }
-
-    fn post_with_origin(origin: Option<&str>) -> Request {
-        let mut b = HttpRequest::builder()
-            .method(Method::POST)
-            .uri("/api/leaderboard");
-        if let Some(o) = origin {
-            b = b.header(header::ORIGIN, o);
-        }
-        b.body(Body::empty()).expect("req")
-    }
-
-    fn assert_forbidden(state: &AppState, origin: Option<&str>, allow_null: bool) {
-        let resp = assert_origin_allowed(&post_with_origin(origin), state, allow_null)
-            .expect_err("should reject");
-        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-    }
-
-    #[test]
-    fn missing_origin_rejected() {
-        assert_forbidden(&build_state("https://snake.example.com"), None, false);
-    }
-
-    #[test]
-    fn matching_origin_allowed() {
-        let state = build_state("https://snake.example.com");
-        assert!(
-            assert_origin_allowed(
-                &post_with_origin(Some("https://snake.example.com")),
-                &state,
-                false
-            )
-            .is_ok()
-        );
-    }
-
-    #[test]
-    fn cross_origin_rejected() {
-        assert_forbidden(
-            &build_state("https://snake.example.com"),
-            Some("https://evil.example.com"),
-            false,
-        );
-    }
-
-    #[test]
-    fn null_origin_rejected_by_default() {
-        assert_forbidden(
-            &build_state("https://snake.example.com"),
-            Some("null"),
-            false,
-        );
-    }
-
-    #[test]
-    fn null_origin_allowed_when_opt_in() {
-        let state = build_state("https://snake.example.com");
-        assert!(assert_origin_allowed(&post_with_origin(Some("null")), &state, true).is_ok());
-    }
-
-    #[test]
-    fn localhost_wildcard_accepts_any_port() {
-        let state = build_state("http://localhost:4501");
-        for origin in [
-            "http://localhost:4501",
-            "http://localhost:5173",
-            "http://localhost:8080",
-        ] {
-            assert!(
-                assert_origin_allowed(&post_with_origin(Some(origin)), &state, false).is_ok(),
-                "expected {origin} to be accepted"
-            );
-        }
-    }
-
-    #[test]
-    fn loopback_wildcard_accepts_any_port() {
-        let state = build_state("http://127.0.0.1:4501");
-        for origin in [
-            "http://127.0.0.1:4501",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1",
-        ] {
-            assert!(
-                assert_origin_allowed(&post_with_origin(Some(origin)), &state, false).is_ok(),
-                "expected {origin} to be accepted"
-            );
-        }
-    }
-
-    #[test]
-    fn production_rejects_loopback_origin() {
-        let state = build_state("https://snake.example.com");
-        let resp = assert_origin_allowed(
-            &post_with_origin(Some("http://localhost:4501")),
-            &state,
-            false,
-        )
-        .expect_err("reject");
-        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-    }
-
-    #[test]
-    fn localhost_does_not_accept_garbage_port() {
-        let state = build_state("http://localhost:4501");
-        for bad in ["http://localhost:abc", "http://localhost:"] {
-            let resp = assert_origin_allowed(&post_with_origin(Some(bad)), &state, false)
-                .expect_err("reject");
-            assert_eq!(resp.status(), StatusCode::FORBIDDEN, "origin: {bad}");
-        }
-    }
-}
+#[path = "origin_check_tests.rs"]
+mod tests;

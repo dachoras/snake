@@ -104,6 +104,9 @@ impl AppConfig {
         // when the caller is just forwarding the env-driven value.
         if server.port == 4401 && port != 4401 {
             server.port = port;
+            if server.base_url == "http://localhost:4401" {
+                server.base_url = format!("http://localhost:{port}");
+            }
         }
 
         // `ENABLE_TRANSLATION` defaults to `true` for Snake (the shared
