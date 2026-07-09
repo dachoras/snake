@@ -7,7 +7,7 @@ Snake is a self-hosted traditional arcade-style snake game application designed 
 ## 🏛️ Architecture & Stack
 *   **Frontend**: Yew (WASM)
 *   **Backend**: Axum (Rust) / Tokio
-*   **Deployment**: Nix-built Container / Unraid native / Docker Compose
+*   **Deployment**: UBI container (Red Hat UBI9) on Docker Hub / Unraid / Podman / Docker Compose
 
 ---
 
@@ -22,6 +22,25 @@ Snake is a self-hosted traditional arcade-style snake game application designed 
 ---
 
 ## 💾 Deployment & Installation
+
+### Container images (Docker Hub)
+
+Images are **UBI9-minimal** based (Red Hat Universal Base Image). Tags:
+
+| Tag | Meaning |
+| :--- | :--- |
+| `latest` | Current recommended build |
+| `ubi` | Explicit UBI image (same lineage as `latest`) |
+| `1.0.43` | Immutable release pin |
+
+```bash
+# Pull examples
+podman pull docker.io/ubermetroid/snake:latest
+podman pull docker.io/ubermetroid/snake:ubi
+podman pull docker.io/ubermetroid/snake:1.0.43
+```
+
+Hub: [https://hub.docker.com/r/ubermetroid/snake](https://hub.docker.com/r/ubermetroid/snake)
 
 ### Docker Compose
 Create a `docker-compose.yml` file with the following service definition:
@@ -47,6 +66,24 @@ services:
       ENABLE_THEMES: ${ENABLE_THEMES:-true}
       ENABLE_PRINT: ${ENABLE_PRINT:-true}
       TZ: ${TZ:-UTC}
+```
+
+### Build the UBI image locally
+
+Requires [Podman](https://podman.io/) (or Docker) and network access to pull base images and crates.
+
+```bash
+# From the repository root
+podman build --format docker -f Containerfile.ubi \
+  -t docker.io/ubermetroid/snake:1.0.43 \
+  -t docker.io/ubermetroid/snake:latest \
+  -t docker.io/ubermetroid/snake:ubi \
+  .
+
+# Optional: push all three tags
+podman push docker.io/ubermetroid/snake:1.0.43
+podman push docker.io/ubermetroid/snake:latest
+podman push docker.io/ubermetroid/snake:ubi
 ```
 
 ---
@@ -86,13 +123,6 @@ cd frontend && trunk serve
 
 # 4. Start backend Axum server (from backend/)
 cd backend && cargo run
-```
-
-### Nix Flake Run
-You can also run or install Snake directly using Nix flakes:
-```bash
-# Run the application directly
-nix run github:UberMetroid/snake --impure
 ```
 
 ---

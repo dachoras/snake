@@ -145,7 +145,7 @@ Follow-up (all Low severity, no release blocker):
 1. Consider replacing `assets.rs:40` `.expect(...)` with a `match` that
    surfaces a startup-time `AppError` if the literal pattern is ever
    edited to something invalid. Cosmetic.
-2. Set `ALLOWED_ORIGINS` explicitly in production compose / Nix
+2. Set `ALLOWED_ORIGINS` explicitly in production compose / container
    deployments instead of relying on the `*` default.
 3. (Already mitigated by `SameSite=Strict`.) If the deployment ever needs
    to accept third-party frontends, revisit CSRF strategy (double-submit

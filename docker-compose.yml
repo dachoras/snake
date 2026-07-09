@@ -1,11 +1,11 @@
 # Snake docker-compose.
 #
 # This file ships a complete, runnable recipe for the `ubermetroid/snake`
-# image (Nix-built, no Dockerfile). Operator overrides come from the
+# image (UBI container from Docker Hub
 # host shell env or a `.env` file in the same directory.
 #
 # --- MANDATORY for a working deployment --------------------------------------
-#   1. `image:`        — pulls the prebuilt Nix-based binary from Docker Hub
+#   1. `image:`        — pulls the prebuilt UBI container image from Docker Hub
 #   2. `volumes:`      — bind-mounts `${SNAKE_DATA_PATH}` to `/app/data` so the
 #                       leaderboard and log files survive container restarts.
 #                       Without this volume, scores vanish every time the
@@ -35,13 +35,13 @@
 services:
   snake:
     # (1) MANDATORY: image to run. Pulled from Docker Hub. To use a
-    # locally-built image instead, replace with `image: snake-nix:latest`
-    # after `nix build .#dockerImage && docker load < result`.
+    # locally-built image instead, replace with `image: ubermetroid/snake:latest`
+    # after `podman build -f Containerfile.ubi
     image: ubermetroid/snake:latest
     container_name: snake
     restart: unless-stopped
 
-    # (2) MANDATORY: persistent volume for the leaderboard + logs. The Nix
+    # (2) MANDATORY: persistent volume for the leaderboard + logs. The UBI
     # image bakes `/app/data` into the container with `nobody` as the owner,
     # so the bind mount lands on a writable directory without an extra
     # `chown`.
@@ -52,7 +52,7 @@ services:
 
     # (3) MANDATORY: port mapping. Default `4501:4501` is the documented
     # port for both the image (per the `Env = ["PORT=4501"]` block in
-    # `flake.nix`'s `dockerImage` derivation) and `default-port: 4501` in
+    # the published container image) and `default-port: 4501` in
     # the README. To expose on a different host port (e.g. behind a
     # reverse proxy on `:443`), set `PORT=8080:4501` here.
     ports:
@@ -60,7 +60,7 @@ services:
 
     environment:
       # ---- Required for any non-localhost deployment ----
-      # Container-internal port. The Nix image defaults to PORT=4501
+      # Container-internal port. The UBI image defaults to PORT=4501
       # already; we set it explicitly so the `ports:` mapping above and
       # the in-container listen address stay in lockstep.
       PORT: 4501

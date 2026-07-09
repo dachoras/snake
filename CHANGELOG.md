@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Brand-name literal consolidated to `pub const APP_BRAND: &str = "Snake"` in `backend/src/config.rs` (replaces 4 hardcoded `"Snake"` strings).
 
 ### Notes
-- The published Docker image still ships the unoptimised 518 KB WASM. Embedding `wasm-opt -Oz` into Nix's `installPhase` ran into read-only-file permission issues that required a `chmod u+w` dance during the chroot-build, and the local script handles the same operation trivially. Run `frontend/scripts/optimise-wasm.sh` after `trunk build --release` for the locally-developed bundle.
+- The published Docker image still ships the unoptimised 518 KB WASM. Embedding `wasm-opt -Oz` into the container build ran into read-only-file permission issues that required a `chmod u+w` dance during the chroot-build, and the local script handles the same operation trivially. Run `frontend/scripts/optimise-wasm.sh` after `trunk build --release` for the locally-developed bundle.
 
 ## [1.0.27] - 2026-07-02
 
