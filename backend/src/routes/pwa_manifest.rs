@@ -1,11 +1,11 @@
 //! PWA web-app manifest endpoint.
 //!
-//! Serves `Assets/manifest.json` from the web-root with the site's title
+//! Serves `assets/manifest.json` from the web-root with the site's title
 //! (and short description) overridden to match the runtime config. If the
 //! prebuilt manifest is missing or unparseable, falls back to a minimal
 //! inline manifest so the browser doesn't reject the install prompt.
 //!
-//! Note on `icons`: the bundled `frontend/Assets/manifest.json` currently
+//! Note on `icons`: the bundled `frontend/assets/manifest.json` currently
 //! reuses `favicon.png` for both the `192x192` and `512x512` slots
 //! because dedicated PNGs of those exact dimensions aren't checked in.
 //! Chrome accepts a single source file at multiple sizes, but for the
@@ -24,9 +24,9 @@ use crate::state::AppState;
 
 const FALLBACK_DESCRIPTION: &str = "A traditional arcade snake game";
 
-/// `GET /Assets/manifest.json` — PWA manifest with runtime-overridden title.
+/// `GET /assets/manifest.json` — PWA manifest with runtime-overridden title.
 pub async fn serve_manifest(State(state): State<AppState>) -> Response {
-    let manifest_path = state.web_root.join("Assets").join("manifest.json");
+    let manifest_path = state.web_root.join("assets").join("manifest.json");
     let content = match fs::read_to_string(&manifest_path).await {
         Ok(s) => s,
         Err(e) => {

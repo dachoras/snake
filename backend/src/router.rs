@@ -81,7 +81,7 @@ pub fn build_router(state: AppState, web_root: &Path) -> Router {
         .route("/login", get(serve_login))
         .route("/service-worker.js", get(serve_service_worker))
         .route("/asset-manifest.json", get(serve_asset_manifest))
-        .route("/Assets/manifest.json", get(serve_manifest))
+        .route("/assets/manifest.json", get(serve_manifest))
         .nest("/api", merged_api)
         .route("/health", get(health_check))
         .route("/ready", get(ready_check))

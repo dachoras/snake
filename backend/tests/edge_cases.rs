@@ -70,7 +70,7 @@ let APP_VERSION = "old";
 #[tokio::test]
 async fn pwa_manifest_overrides_site_title() {
     let (_tmp, _state, router) = build_test_app(None).await;
-    let (status, body, _headers) = send(&router, get("/Assets/manifest.json")).await;
+    let (status, body, _headers) = send(&router, get("/assets/manifest.json")).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["name"], "Snake");
     assert_eq!(body["short_name"], "Snake");

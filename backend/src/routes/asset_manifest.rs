@@ -15,7 +15,7 @@ use crate::error::AppError;
 use crate::state::AppState;
 
 /// File-system entry that should be skipped during the manifest scan.
-const SKIP_NAMES: &[&str] = &[".DS_Store", "Assets"];
+const SKIP_NAMES: &[&str] = &[".DS_Store", "assets"];
 
 /// Recursive scan of `dir`, returning URLs (relative to the web root) for
 /// every regular file encountered.
@@ -93,14 +93,14 @@ mod tests {
         let tmp = TempDir::new().expect("tempdir");
         std::fs::write(tmp.path().join("index.html"), b"<html>").expect("write");
         std::fs::write(tmp.path().join(".DS_Store"), b"junk").expect("write");
-        std::fs::create_dir(tmp.path().join("Assets")).expect("mkdir");
-        std::fs::write(tmp.path().join("Assets").join("logo.png"), b"\x89").expect("write");
+        std::fs::create_dir(tmp.path().join("assets")).expect("mkdir");
+        std::fs::write(tmp.path().join("assets").join("logo.png"), b"\x89").expect("write");
 
         let mut files = Vec::new();
         get_files(tmp.path(), "", &mut files).expect("scan");
         assert!(files.contains(&"/index.html".to_string()));
         assert!(!files.iter().any(|f| f.contains(".DS_Store")));
-        assert!(!files.iter().any(|f| f.contains("Assets")));
+        assert!(!files.iter().any(|f| f.contains("assets")));
     }
 
     #[test]
