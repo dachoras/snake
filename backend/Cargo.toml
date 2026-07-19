@@ -62,3 +62,4 @@ constant_time_eq = "0.5"
 tempfile = "3"
 # Needed for `tower::ServiceExt::oneshot` in `tests/integration.rs`.
 tower = { version = "0.5", features = ["util"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "cookies"] }
