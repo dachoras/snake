@@ -1,7 +1,8 @@
 # Snake docker-compose.
 #
 # This file ships a complete, runnable recipe for the `ghcr.io/studio2201/snake`
-# image (UBI container from GHCR
+# image (UBI container from GHCR).
+# Configure the deployment by exporting variables in the
 # host shell env or a `.env` file in the same directory.
 #
 # --- MANDATORY for a working deployment --------------------------------------
@@ -30,7 +31,7 @@
 #
 # --- OPTIONAL UI FEATURES ------------------------------------------------------
 #   * `ENABLE_TRANSLATION` — show the language picker in the header.
-#   * `ENABLE_THEMES`      — show the Super Metroid theme picker.
+#   * `ENABLE_THEMES`      — show the theme picker.
 #   * `ENABLE_PRINT`       — show the print button (browser print dialog).
 services:
   snake:
