@@ -13,7 +13,7 @@
   <Category>Game:Arcade Network:Web</Category>
   <WebUI>http://[IP]:[PORT:4501]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/studio2201/unraid-templates/master/templates/snake.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/studio2201/unraid-templates/master/icons/snake.png</Icon>
+  <Icon>https://raw.githubusercontent.com/studio2201/.github/master/profile/assets/snake.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
