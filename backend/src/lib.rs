@@ -1,3 +1,5 @@
+mod cookie_auth;
+mod session_id;
 //! Snake backend library entrypoint.
 //!
 //! The crate is structured so that `main.rs` is a thin orchestration shell

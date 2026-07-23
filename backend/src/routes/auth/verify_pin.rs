@@ -122,10 +122,8 @@ pub async fn verify_pin(
     let session_id = generate_session_id();
     state.register_session(session_id.clone()).await;
 
-    let secure = shared_backend::cookie_auth::cookie_should_be_secure(&headers, &state.config.server.base_url);
-    let cookie = shared_backend::cookie_auth::build_cookie(
-        super::COOKIE_NAME,
-        &session_id,
+    let secure = crate::cookie_auth::cookie_should_be_secure(&headers, &state.config.server.base_url);
+    let cookie = crate::cookie_auth::build_cookie(&session_id,
         state.config.server.cookie_max_age_hours,
         secure,
     );
