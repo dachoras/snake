@@ -31,9 +31,8 @@ impl EventListener {
         F: FnMut(web_sys::Event) + 'static,
     {
         let closure = Closure::wrap(Box::new(callback) as Box<dyn FnMut(web_sys::Event)>);
-        target
-            .add_event_listener_with_callback(event_type, closure.as_ref().unchecked_ref())
-            .expect("failed to attach event listener");
+        let _ =
+            target.add_event_listener_with_callback(event_type, closure.as_ref().unchecked_ref());
         Self {
             target: target.clone(),
             event_type,

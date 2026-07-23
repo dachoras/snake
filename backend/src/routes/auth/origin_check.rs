@@ -46,7 +46,11 @@ pub fn assert_origin_allowed(
         return Err(Box::new(forbidden_response()));
     }
     let base = state.config.server.base_url.as_str();
-    let is_same_origin = if let Some(host) = req.headers().get(header::HOST).and_then(|h| h.to_str().ok()) {
+    let is_same_origin = if let Some(host) = req
+        .headers()
+        .get(header::HOST)
+        .and_then(|h| h.to_str().ok())
+    {
         let stripped_origin = origin
             .strip_prefix("http://")
             .or_else(|| origin.strip_prefix("https://"))

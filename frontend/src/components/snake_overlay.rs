@@ -39,7 +39,7 @@ pub struct SnakeOverlayProps {
 /// to their respective markup.
 #[function_component(SnakeOverlay)]
 pub fn snake_overlay(props: &SnakeOverlayProps) -> Html {
-    let locale = use_context::<crate::i18n::LocaleContext>().expect("LocaleContext provided");
+    let locale = use_context::<crate::i18n::LocaleContext>().unwrap_or_default();
 
     if !props.started {
         html! {

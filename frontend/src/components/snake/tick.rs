@@ -9,7 +9,7 @@
 use gloo_timers::callback::Interval;
 use yew::prelude::*;
 
-use super::super::snake_logic::{Pos, handle_tick, PureTickInputs};
+use super::super::snake_logic::{Pos, PureTickInputs, handle_tick};
 use super::food::{GRID_SIZE, generate_food};
 
 /// Tick interval floor. Even at high scores the snake never moves faster

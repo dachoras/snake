@@ -26,7 +26,7 @@ pub struct SnakeGameProps {
 #[function_component(SnakeGame)]
 pub fn snake_game(props: &SnakeGameProps) -> Html {
     let state = use_snake_state(props.on_status.clone());
-    let locale = use_context::<crate::i18n::LocaleContext>().expect("LocaleContext provided");
+    let locale = use_context::<crate::i18n::LocaleContext>().unwrap_or_default();
 
     html! {
         <div class="snake-container">

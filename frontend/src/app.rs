@@ -114,52 +114,31 @@ impl Component for App {
     fn rendered(&mut self, ctx: &Context<Self>, first_render: bool) {
         if first_render {
             use wasm_bindgen::JsCast;
-            // The renderer only runs in the browser, so `window()` is safe to
-            // unwrap. Documented per the "no unwrap in non-test code" rule.
-            let window = web_sys::window().expect("renderer runs in a browser window");
+            if let Some(window) = web_sys::window() {
+                let link_online = ctx.link().clone();
+                let on_online = wasm_bindgen::prelude::Closure::<dyn FnMut(_)>::new(
+                    move |_: web_sys::Event| {
+                        link_online.send_message(Msg::OnlineStatusChanged(true));
+                    },
+                );
+                let _ = window
+                    .add_event_listener_with_callback("online", on_online.as_ref().unchecked_ref());
+                on_online.forget();
 
-            let link_online = ctx.link().clone();
-            let on_online =
-                wasm_bindgen::prelude::Closure::<dyn FnMut(_)>::new(move |_: web_sys::Event| {
-                    link_online.send_message(Msg::OnlineStatusChanged(true));
-                });
-            window
-                .add_event_listener_with_callback("online", on_online.as_ref().unchecked_ref())
-                .expect("failed to register online listener");
-            on_online.forget();
-
-            let link_offline = ctx.link().clone();
-            let on_offline =
-                wasm_bindgen::prelude::Closure::<dyn FnMut(_)>::new(move |_: web_sys::Event| {
-                    link_offline.send_message(Msg::OnlineStatusChanged(false));
-                });
-            window
-                .add_event_listener_with_callback("offline", on_offline.as_ref().unchecked_ref())
-                .expect("failed to register offline listener");
-            on_offline.forget();
+                let link_offline = ctx.link().clone();
+                let on_offline = wasm_bindgen::prelude::Closure::<dyn FnMut(_)>::new(
+                    move |_: web_sys::Event| {
+                        link_offline.send_message(Msg::OnlineStatusChanged(false));
+                    },
+                );
+                let _ = window.add_event_listener_with_callback(
+                    "offline",
+                    on_offline.as_ref().unchecked_ref(),
+                );
+                on_offline.forget();
+            }
 
             // Service-worker update handshake.
-            //
-            // We subscribe to BOTH `message` (the SW's explicit
-            // `CACHE_UPDATED` ping after a new version installs) and
-            // `controllerchange` (fires when `clients.claim()` takes
-            // over this page). The two paths overlap but are not
-            // identical: `message` can be missed if the SW activated
-            // while the page was in bfcache or before our listener was
-            // bound; `controllerchange` fires even when no `postMessage`
-            // ever reached this client (e.g. a fresh tab opened against
-            // an already-upgraded cache). Subscribing to both keeps the
-            // handshake reliable across realistic post-deployment flows.
-            // The defensive version compare on `message` prevents a
-            // self-reload when the SW is announcing a version we already
-            // mirror from `/api/config`.
-            //
-            // `navigator.serviceWorker` and `addEventListener` are
-            // reached via `js_sys::Reflect` because the
-            // `ServiceWorkerContainer` and `EventTarget` web-sys
-            // features aren't enabled in `Cargo.toml`; typed access
-            // would require a manifest change outside this file's scope.
-
             let on_message = wasm_bindgen::prelude::Closure::<dyn FnMut(_)>::new(
                 move |event: web_sys::Event| {
                     let data = match js_sys::Reflect::get(
@@ -190,8 +169,6 @@ impl Component for App {
                             .ok()
                             .and_then(|v| v.as_string())
                             .unwrap_or_default();
-                    // Defensive: skip the reload when the SW announces
-                    // a version we already mirror from `/api/config`.
                     let already_known = APP_VERSION.with(|v| msg_version == v.borrow().as_str());
                     if already_known {
                         return;
@@ -203,19 +180,17 @@ impl Component for App {
             );
             let on_controllerchange =
                 wasm_bindgen::prelude::Closure::<dyn FnMut(_)>::new(move |_: web_sys::Event| {
-                    // `controllerchange` carries no payload, so the
-                    // defensive version compare cannot apply. Trust the
-                    // SW's `clients.claim()` and reload unconditionally.
                     if let Some(w) = web_sys::window() {
                         let _ = w.location().reload();
                     }
                 });
 
-            if let Some(sw_container) = js_sys::Reflect::get(
-                window.navigator().as_ref(),
-                &wasm_bindgen::JsValue::from_str("serviceWorker"),
-            )
-            .ok()
+            if let Some(navigator) = web_sys::window().map(|w| w.navigator())
+                && let Some(sw_container) = js_sys::Reflect::get(
+                    navigator.as_ref(),
+                    &wasm_bindgen::JsValue::from_str("serviceWorker"),
+                )
+                .ok()
                 && let Ok(add_fn) = js_sys::Reflect::get(
                     &sw_container,
                     &wasm_bindgen::JsValue::from_str("addEventListener"),

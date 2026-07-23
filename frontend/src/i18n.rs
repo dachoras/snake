@@ -43,6 +43,15 @@ impl LocaleContext {
     }
 }
 
+impl Default for LocaleContext {
+    fn default() -> Self {
+        Self {
+            current: "en".to_string(),
+            on_change: Callback::noop(),
+        }
+    }
+}
+
 /// Looks up a translation key in the appropriate language table.
 ///
 /// Falls back to the raw key when no table contains it so the UI never

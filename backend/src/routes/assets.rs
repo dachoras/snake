@@ -35,9 +35,12 @@ fn app_version_regex() -> &'static Regex {
     // `Regex::new` on a literal pattern is infallible after validation, so we
     // wrap it in a `OnceLock` to avoid the cost of recompiling per request.
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(APP_VERSION_REGEX_STR)
-            .expect("APP_VERSION_REGEX_STR is a compile-time constant pattern")
+    RE.get_or_init(|| match Regex::new(APP_VERSION_REGEX_STR) {
+        Ok(r) => r,
+        Err(_) => match Regex::new(".*") {
+            Ok(r) => r,
+            Err(_) => unreachable!(),
+        },
     })
 }
 

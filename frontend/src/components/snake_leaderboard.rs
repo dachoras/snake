@@ -15,7 +15,7 @@ pub struct LeaderboardPanelProps {
 /// state message when no scores exist yet.
 #[function_component(LeaderboardPanel)]
 pub fn leaderboard_panel(props: &LeaderboardPanelProps) -> Html {
-    let locale = use_context::<crate::i18n::LocaleContext>().expect("LocaleContext provided");
+    let locale = use_context::<crate::i18n::LocaleContext>().unwrap_or_default();
     html! {
         <div class="leaderboard-panel">
             <h3>{locale.t("leaderboard")}</h3>

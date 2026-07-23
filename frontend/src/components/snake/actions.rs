@@ -89,11 +89,17 @@ pub fn make_on_submit_score(
                         leaderboard.set(list);
                     }
                     submitted.set(true);
-                    on_status.emit(Some(("Score submitted successfully!".to_string(), "success".to_string())));
+                    on_status.emit(Some((
+                        "Score submitted successfully!".to_string(),
+                        "success".to_string(),
+                    )));
                 }
                 Err(e) => {
                     web_sys::console::error_1(&format!("Failed to submit score: {:?}", e).into());
-                    on_status.emit(Some((format!("Submission failed: {}", e), "error".to_string())));
+                    on_status.emit(Some((
+                        format!("Submission failed: {}", e),
+                        "error".to_string(),
+                    )));
                 }
             }
             submitting.set(false);

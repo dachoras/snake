@@ -54,36 +54,31 @@ pub fn use_keyboard_listener(
     use_effect_with(
         (is_started, is_game_over, is_paused),
         move |&(st, go, ps)| {
-            // The renderer only runs in a browser window, so `window()` is
-            // safe to unwrap. Documented per the "no unwrap in non-test code"
-            // rule that applies to this crate.
-            let window = web_sys::window().expect("renderer runs in a browser window");
-            let paused = paused.clone();
-            let callback_ref = callback_ref_for_listener.clone();
-            let listener = EventListener::new(&window, "keydown", move |e: web_sys::Event| {
-                // The event is registered as `"keydown"` so the target is
-                // always a `KeyboardEvent`; the cast cannot fail at runtime.
-                use wasm_bindgen::JsCast;
-                let key_event = e
-                    .dyn_ref::<web_sys::KeyboardEvent>()
-                    .expect("keydown event is a KeyboardEvent");
-                let key = key_event.key();
+            let listener = web_sys::window().map(|window| {
+                let paused = paused.clone();
+                let callback_ref = callback_ref_for_listener.clone();
+                EventListener::new(&window, "keydown", move |e: web_sys::Event| {
+                    use wasm_bindgen::JsCast;
+                    if let Some(key_event) = e.dyn_ref::<web_sys::KeyboardEvent>() {
+                        let key = key_event.key();
 
-                if key == "Escape" || key == "p" || key == "P" {
-                    if st && !go {
-                        paused.set(!ps);
+                        if key == "Escape" || key == "p" || key == "P" {
+                            if st && !go {
+                                paused.set(!ps);
+                            }
+                            return;
+                        }
+
+                        // Disallow movement inputs while paused.
+                        if ps {
+                            return;
+                        }
+
+                        if let Some(dir) = direction_for_key(&key) {
+                            callback_ref.borrow().emit(dir);
+                        }
                     }
-                    return;
-                }
-
-                // Disallow movement inputs while paused.
-                if ps {
-                    return;
-                }
-
-                if let Some(dir) = direction_for_key(&key) {
-                    callback_ref.borrow().emit(dir);
-                }
+                })
             });
             move || drop(listener)
         },

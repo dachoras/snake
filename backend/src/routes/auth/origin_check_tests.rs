@@ -134,8 +134,8 @@ fn production_rejects_loopback_origin() {
 fn localhost_does_not_accept_garbage_port() {
     let state = build_state("http://localhost:4501");
     for bad in ["http://localhost:abc", "http://localhost:"] {
-        let resp = assert_origin_allowed(&post_with_origin(Some(bad)), &state, false)
-            .expect_err("reject");
+        let resp =
+            assert_origin_allowed(&post_with_origin(Some(bad)), &state, false).expect_err("reject");
         assert_eq!(resp.status(), StatusCode::FORBIDDEN, "origin: {bad}");
     }
 }
@@ -144,7 +144,10 @@ fn localhost_does_not_accept_garbage_port() {
 fn host_header_same_origin_allowed() {
     let state = build_state("http://localhost:4501");
     let mut req = post_with_origin(Some("http://192.168.1.50:4501"));
-    req.headers_mut().insert(header::HOST, axum::http::HeaderValue::from_static("192.168.1.50:4501"));
+    req.headers_mut().insert(
+        header::HOST,
+        axum::http::HeaderValue::from_static("192.168.1.50:4501"),
+    );
     assert!(assert_origin_allowed(&req, &state, false).is_ok());
 }
 
@@ -152,7 +155,10 @@ fn host_header_same_origin_allowed() {
 fn host_header_mismatch_rejected() {
     let state = build_state("http://localhost:4501");
     let mut req = post_with_origin(Some("http://192.168.1.50:4501"));
-    req.headers_mut().insert(header::HOST, axum::http::HeaderValue::from_static("192.168.1.99:4501"));
+    req.headers_mut().insert(
+        header::HOST,
+        axum::http::HeaderValue::from_static("192.168.1.99:4501"),
+    );
     let resp = assert_origin_allowed(&req, &state, false).expect_err("reject");
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }

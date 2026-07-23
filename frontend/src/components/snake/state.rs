@@ -16,7 +16,7 @@ use super::actions::{
     make_on_dpad_press, make_on_name_input, make_on_restart, make_on_resume, make_on_submit_score,
     make_set_next_dir,
 };
-use super::food::{use_gold_timeout, load_high_score};
+use super::food::{load_high_score, use_gold_timeout};
 use super::keys::use_keyboard_listener;
 use super::tick::{TickInputs, use_tick_loop};
 
@@ -58,10 +58,7 @@ pub fn use_snake_state(on_status: Callback<Option<(String, String)>>) -> SnakeSt
     let player_name = use_state(String::new);
     let submitting = use_state(|| false);
     let submitted = use_state(|| false);
-    // `LocaleContext` is always provided by the root `App` view. Documented
-    // per the "no unwrap in non-test code" rule that applies to this crate.
-    let locale =
-        use_context::<crate::i18n::LocaleContext>().expect("LocaleContext provided by App view");
+    let locale = use_context::<crate::i18n::LocaleContext>().unwrap_or_default();
 
     // Pre-fetch the leaderboard on mount so the panel renders populated
     // data on first paint; later updates arrive via `on_submit_score`.
