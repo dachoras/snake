@@ -1,4 +1,4 @@
-getrandom = { version = "0.2" }
+
 [package]
 name = "backend"
 version.workspace = true
@@ -19,6 +19,7 @@ name = "sh"
 path = "src/bin/sh/main.rs"
 
 [dependencies]
+getrandom = { version = "0.2" }
 shared-core = { git = "https://github.com/studio2201/shared-assets", tag = "v3.0.39" }
 shared-backend = { git = "https://github.com/studio2201/shared-assets", tag = "v3.0.39" }
 axum = { version = "0.8", features = ["ws", "macros"] }
