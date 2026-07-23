@@ -93,12 +93,8 @@ Distributed under the Apache 2.0 License. See [LICENSE](LICENSE) for details.
 
 ---
 
-### Project Banner Showcase
-
-Official **Snake** project banner featuring retro neon arcade gameplay visual design.
-
 <p align="center">
   <a href="https://github.com/studio2201/snake">
-    <img src="assets/snake-header.jpg" alt="studio2201 banner" width="100%">
+    <img src="assets/corgi-footer.jpg" alt="studio2201 banner" width="100%">
   </a>
 </p>
