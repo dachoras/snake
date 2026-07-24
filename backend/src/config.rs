@@ -43,14 +43,14 @@ impl AppConfig {
     pub const APP_BRAND: &str = "Snake";
 
     /// Build a config by reading common env vars.
-    pub fn load() -> Self {
+    pub fn load_from_env(port: u16) -> Self {
         #[cfg(not(test))]
         {
             let _ = dotenvy::from_path("/app/data/.env");
             let _ = dotenvy::dotenv();
         }
 
-        let port = parse_or("PORT", DEFAULT_PORT);
+        let port = if port != 0 && port != DEFAULT_PORT { port } else { parse_or("PORT", DEFAULT_PORT) };
         let site_title = first_nonempty_env(&[
             "Snake_SITE_TITLE",
             "Snake_TITLE",
@@ -88,6 +88,9 @@ impl AppConfig {
             lockout_time_minutes: parse_or("LOCKOUT_TIME_MINUTES", 15u64),
             cookie_max_age_hours: parse_or("COOKIE_MAX_AGE_HOURS", 24i64),
             shutdown_drain_seconds: parse_or("SHUTDOWN_DRAIN_SECONDS", 5u64),
+            page_history_cookie_age_days: 1,
+            node_env: "test".to_string(),
+            version: "test".to_string(),
 
         }
     }
@@ -166,13 +169,13 @@ mod tests {
 
     #[test]
     fn load_does_not_panic() {
-        let cfg = AppConfig::load();
+        let cfg = AppConfig::load_from_env(4502);
         assert!(!cfg.site_title.is_empty());
     }
 
     #[test]
     fn lockout_duration_scales_with_minutes() {
-        let cfg = AppConfig::load();
+        let cfg = AppConfig::load_from_env(4502);
         let expected =
             std::time::Duration::from_secs(cfg.lockout_time_minutes * 60);
         assert_eq!(cfg.lockout_duration(), expected);
