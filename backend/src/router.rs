@@ -92,7 +92,7 @@ pub fn build_router(state: AppState, web_root: &Path) -> Router {
                 .precompressed_gzip(),
         )
         .layer(middleware::from_fn_with_state(
-            crate::middleware::HstsState(server_config.clone()),
+            crate::middleware::crate::middleware::HstsState(server_config.clone()),
             hsts_layer,
         ))
         .layer(middleware::from_fn_with_state(crate::middleware::SecurityHeadersState(server_config.clone()), crate::middleware::security_headers_layer))
